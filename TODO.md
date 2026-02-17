@@ -29,7 +29,7 @@
 - [x] **3.1** Define `ChainConfig` type and export configs for all 10 chains (Ethereum, Polygon, Arbitrum, Optimism, Base, BSC, Avalanche, Linea, Scroll, Sepolia) with chainId, name, RPC URLs, block explorer, USDC/USDT addresses
 - [x] **3.2** Export contract ABIs (auto-generated from Foundry `out/`) and typed ethers contract factories
 - [x] **3.3** Define shared TypeScript types: `RelayRequest`, `RelayQuote`, `RelayStatus`, `PoolWallet`, `TransactionRecord`
-- [ ] **3.4** Export constants: fee margin (25%), min/max relay amounts, confirmation block counts, SQS queue names, DynamoDB table names
+- [x] **3.4** Export constants: fee margin (25%), min/max relay amounts, confirmation block counts, SQS queue names, DynamoDB table names
 
 ## 4 · API Handlers
 

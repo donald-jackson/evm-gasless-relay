@@ -11,7 +11,7 @@
 - [x] **1.2** Initialise pnpm monorepo: root `package.json` with `pnpm-workspace.yaml` defining `packages/*` and `contracts/*`
 - [x] **1.3** Create `packages/shared`, `packages/api`, `packages/worker`, `packages/infra` workspaces each with `package.json` and `tsconfig.json`
 - [x] **1.4** Add root-level TypeScript, ESLint, Prettier configs; verify `pnpm lint` runs cleanly across all workspaces
-- [ ] **1.5** Install Foundry (`foundryup`), scaffold `contracts/` with `forge init --no-git`, verify `forge build` succeeds
+- [x] **1.5** Install Foundry (`foundryup`), scaffold `contracts/` with `forge init --no-git`, verify `forge build` succeeds
 
 ## 2 · Smart Contract
 

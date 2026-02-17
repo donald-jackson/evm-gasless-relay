@@ -1,0 +1,10 @@
+{
+  "name": "@stablecoin-relay/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "lint": "echo 'no lint for solidity'"
+  }
+}

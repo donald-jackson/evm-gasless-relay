@@ -7,8 +7,8 @@
 
 ## 1 · Project Setup
 
-- [ ] **1.1** Run `git init`, create `.gitignore` (node_modules, .env, out/, cache/, cdk.out), and make initial commit
-- [ ] **1.2** Initialise pnpm monorepo: root `package.json` with `pnpm-workspace.yaml` defining `packages/*` and `contracts/*`
+- [x] **1.1** Run `git init`, create `.gitignore` (node_modules, .env, out/, cache/, cdk.out), and make initial commit
+- [x] **1.2** Initialise pnpm monorepo: root `package.json` with `pnpm-workspace.yaml` defining `packages/*` and `contracts/*`
 - [ ] **1.3** Create `packages/shared`, `packages/api`, `packages/worker`, `packages/infra` workspaces each with `package.json` and `tsconfig.json`
 - [ ] **1.4** Add root-level TypeScript, ESLint, Prettier configs; verify `pnpm lint` runs cleanly across all workspaces
 - [ ] **1.5** Install Foundry (`foundryup`), scaffold `contracts/` with `forge init --no-git`, verify `forge build` succeeds

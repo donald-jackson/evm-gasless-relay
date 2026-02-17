@@ -1,0 +1,16 @@
+{
+  "name": "stablecoin-relay",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Gasless stablecoin relay API using EIP-2612 permit signatures",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "format": "prettier --write '**/*.{ts,tsx,js,json,md}'"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}

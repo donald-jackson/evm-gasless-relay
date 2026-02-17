@@ -6,7 +6,7 @@ remappings = [
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
   "permit2/=lib/permit2/",
 ]
-solc_version = "0.8.20"
+solc_version = "0.8.24"
 
 [profile.default.fuzz]
 runs = 256

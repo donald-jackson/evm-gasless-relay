@@ -18,7 +18,7 @@
 - [x] **2.1** Write `src/StablecoinRelay.sol`: `relayWithPermit(address token, address from, address to, uint256 amount, uint256 fee, uint256 deadline, uint8 v, bytes32 r, bytes32 s)` using EIP-2612 `permit` + `transferFrom`
 - [x] **2.2** Add `relayWithPermit2(...)` variant accepting Permit2 signatures for tokens without native permit support
 - [x] **2.3** Add owner-only `withdrawFees(address token, address to)` and `pause()`/`unpause()` functions
-- [ ] **2.4** Write Foundry unit tests for `relayWithPermit` happy path (mock ERC20 with permit)
+- [x] **2.4** Write Foundry unit tests for `relayWithPermit` happy path (mock ERC20 with permit)
 - [ ] **2.5** Write Foundry tests for edge cases: expired deadline, invalid signature, paused contract, insufficient balance
 - [ ] **2.6** Write Foundry test for `relayWithPermit2` using Permit2 mock
 - [ ] **2.7** Create `script/Deploy.s.sol` deployment script; verify it works with `forge script --dry-run`

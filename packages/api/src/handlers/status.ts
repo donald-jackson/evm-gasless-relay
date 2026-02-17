@@ -3,6 +3,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { DYNAMODB_TABLE_TRANSACTIONS } from "@stablecoin-relay/shared";
 import type { TransactionRecord } from "@stablecoin-relay/shared";
+import { logger } from "@stablecoin-relay/shared";
 import { jsonResponse, errorResponse } from "../response.js";
 
 const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -39,6 +40,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       error: record.error ?? null,
     });
   } catch (err) {
+    logger.error("Status handler error", {
+      handler: "status",
+      error: err instanceof Error ? err.message : String(err),
+    });
     return errorResponse(500, "Internal server error");
   }
 };

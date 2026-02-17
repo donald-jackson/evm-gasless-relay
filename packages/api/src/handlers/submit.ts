@@ -13,6 +13,7 @@ import {
   MAX_RELAY_AMOUNT,
 } from "@stablecoin-relay/shared";
 import type { TransactionRecord } from "@stablecoin-relay/shared";
+import { logger } from "@stablecoin-relay/shared";
 import { jsonResponse, errorResponse } from "../response.js";
 
 const submitRequestSchema = z.object({
@@ -34,11 +35,15 @@ const sqsClient = new SQSClient({});
 const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+  const correlationId = event.requestContext?.requestId ?? "unknown";
+  const startTime = Date.now();
+
   try {
     const body = JSON.parse(event.body ?? "{}");
     const parsed = submitRequestSchema.safeParse(body);
 
     if (!parsed.success) {
+      logger.warn("Validation failed", { handler: "submit", correlationId });
       return errorResponse(400, "Invalid request", parsed.error.flatten());
     }
 
@@ -113,12 +118,31 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       }),
     );
 
+    const durationMs = Date.now() - startTime;
+    logger.info("Relay request queued", {
+      handler: "submit",
+      requestId,
+      chainId,
+      token,
+      from,
+      to,
+      amount,
+      fee: fee.toString(),
+      durationMs,
+      correlationId,
+    });
+
     return jsonResponse(200, {
       requestId,
       status: "queued",
       estimatedWaitSeconds: 15,
     });
   } catch (err) {
+    logger.error("Submit handler error", {
+      handler: "submit",
+      correlationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return errorResponse(500, "Internal server error");
   }
 };

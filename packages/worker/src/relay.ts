@@ -12,6 +12,7 @@ import {
   MAX_RETRY_ATTEMPTS,
 } from "@stablecoin-relay/shared";
 import type { RelayStatusValue } from "@stablecoin-relay/shared";
+import { logger } from "@stablecoin-relay/shared";
 import { deriveWallets, type DerivedWallet } from "./wallet.js";
 import { acquireWallet, releaseWallet } from "./pool.js";
 import { getAndIncrementNonce } from "./nonce.js";
@@ -82,11 +83,24 @@ async function updateTransactionStatus(
 }
 
 async function processRelayMessage(msg: RelayMessage): Promise<void> {
+  const startTime = Date.now();
   const { requestId, chainId, token, from, to, amount, fee, deadline, v, r, s } = msg;
   const chain = getChainConfig(chainId);
   const relayAddress = RELAY_CONTRACTS[chainId];
 
+  logger.info("Processing relay message", {
+    requestId,
+    chainId,
+    token,
+    from,
+    to,
+    amount,
+    fee,
+    handler: "worker",
+  });
+
   if (!relayAddress) {
+    logger.error("No relay contract", { requestId, chainId, handler: "worker" });
     await updateTransactionStatus(requestId, "failed", {
       error: `No relay contract on chainId ${chainId}`,
     });
@@ -126,14 +140,40 @@ async function processRelayMessage(msg: RelayMessage): Promise<void> {
       nonce,
     });
 
+    logger.info("Transaction submitted", {
+      requestId,
+      chainId,
+      txHash: tx.hash,
+      relayer: poolWallet.address,
+      handler: "worker",
+    });
+
     await updateTransactionStatus(requestId, "submitted", {
       txHash: tx.hash,
     });
 
     // Wait for confirmation
     await waitForConfirmation(requestId, tx.hash, chainId);
+
+    const durationMs = Date.now() - startTime;
+    logger.info("Relay confirmed", {
+      requestId,
+      chainId,
+      txHash: tx.hash,
+      amount,
+      fee,
+      durationMs,
+      handler: "worker",
+    });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
+    logger.error("Relay failed", {
+      requestId,
+      chainId,
+      error: errorMsg,
+      durationMs: Date.now() - startTime,
+      handler: "worker",
+    });
     await updateTransactionStatus(requestId, "failed", {
       error: errorMsg,
     });

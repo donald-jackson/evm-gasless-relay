@@ -8,6 +8,7 @@ import {
   SUPPORTED_CHAIN_IDS,
 } from "@stablecoin-relay/shared";
 import type { PoolWallet } from "@stablecoin-relay/shared";
+import { logger } from "@stablecoin-relay/shared";
 import { jsonResponse, errorResponse } from "../response.js";
 
 const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -62,6 +63,10 @@ export const handler: APIGatewayProxyHandlerV2 = async () => {
       },
     });
   } catch (err) {
+    logger.error("Health check failed", {
+      handler: "health",
+      error: err instanceof Error ? err.message : String(err),
+    });
     return errorResponse(500, "Health check failed");
   }
 };

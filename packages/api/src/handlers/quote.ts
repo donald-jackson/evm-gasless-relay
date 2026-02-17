@@ -8,6 +8,7 @@ import {
   MIN_FEE_USDC,
   DEFAULT_GAS_ESTIMATE,
 } from "@stablecoin-relay/shared";
+import { logger } from "@stablecoin-relay/shared";
 import { jsonResponse, errorResponse } from "../response.js";
 
 const quoteRequestSchema = z.object({
@@ -21,6 +22,7 @@ const quoteRequestSchema = z.object({
 });
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+  const startTime = Date.now();
   try {
     const body = JSON.parse(event.body ?? "{}");
     const parsed = quoteRequestSchema.safeParse(body);
@@ -59,6 +61,15 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     const totalRequired = BigInt(amount) + fee;
     const expiresAt = new Date(Date.now() + QUOTE_EXPIRY_MS).toISOString();
 
+    logger.info("Quote generated", {
+      handler: "quote",
+      chainId,
+      token,
+      amount,
+      fee: fee.toString(),
+      durationMs: Date.now() - startTime,
+    });
+
     return jsonResponse(200, {
       chainId,
       token,
@@ -70,6 +81,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       expiresAt,
     });
   } catch (err) {
+    logger.error("Quote handler error", {
+      handler: "quote",
+      error: err instanceof Error ? err.message : String(err),
+    });
     return errorResponse(500, "Internal server error");
   }
 };

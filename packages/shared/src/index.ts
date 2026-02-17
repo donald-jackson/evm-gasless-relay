@@ -5,3 +5,4 @@ export * from "./contracts.js";
 export * from "./types.js";
 export * from "./constants.js";
 export * from "./fee/index.js";
+export * from "./logger.js";

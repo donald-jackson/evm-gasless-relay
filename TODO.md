@@ -52,10 +52,10 @@
 
 ## 6 · Fee System
 
-- [ ] **6.1** Implement gas price fetcher: query each chain's RPC for current gas price with EIP-1559 support where available
-- [ ] **6.2** Implement DEX price oracle: query Uniswap V3 QuoterV2 for ETH/USDC price (PancakeSwap on BSC); cache for 60s
-- [ ] **6.3** Implement fee calculator: `fee = (gasEstimate × gasPrice × ethPrice) × (1 + margin)`, with min fee floor
-- [ ] **6.4** Implement fee recycler: after relay, compare actual gas used vs estimated, log over/under-charges for monitoring
+- [x] **6.1** Implement gas price fetcher: query each chain's RPC for current gas price with EIP-1559 support where available
+- [x] **6.2** Implement DEX price oracle: query Uniswap V3 QuoterV2 for ETH/USDC price (PancakeSwap on BSC); cache for 60s
+- [x] **6.3** Implement fee calculator: `fee = (gasEstimate × gasPrice × ethPrice) × (1 + margin)`, with min fee floor
+- [x] **6.4** Implement fee recycler: after relay, compare actual gas used vs estimated, log over/under-charges for monitoring
 
 ## 7 · Infrastructure (AWS CDK)
 

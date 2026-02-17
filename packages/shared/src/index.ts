@@ -4,3 +4,4 @@ export * from "./abi.js";
 export * from "./contracts.js";
 export * from "./types.js";
 export * from "./constants.js";
+export * from "./fee/index.js";

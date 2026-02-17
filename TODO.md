@@ -48,7 +48,7 @@
 - [x] **5.4** Implement relay worker: receive SQS message, select EOA, build + sign + send `relayWithPermit` transaction, update status
 - [x] **5.5** Implement transaction confirmation watcher: poll for receipt, update DynamoDB status (pending → confirmed / failed)
 - [x] **5.6** Implement retry logic: on revert or timeout, retry with bumped gas price (up to 3 attempts), then mark failed
-- [ ] **5.7** Write unit tests for wallet derivation, nonce manager, and pool manager (mocked DynamoDB)
+- [x] **5.7** Write unit tests for wallet derivation, nonce manager, and pool manager (mocked DynamoDB)
 
 ## 6 · Fee System
 

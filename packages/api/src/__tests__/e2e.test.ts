@@ -31,9 +31,6 @@ const ERC20_PERMIT_ABI = [
   "function decimals() view returns (uint8)",
 ];
 
-const PERMIT_TYPEHASH =
-  "0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9";
-
 // Skip if env vars not set
 const runE2E = API_URL && SENDER_KEY;
 

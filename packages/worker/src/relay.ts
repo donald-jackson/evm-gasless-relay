@@ -1,4 +1,4 @@
-import type { SQSHandler, SQSRecord } from "aws-lambda";
+import type { SQSHandler } from "aws-lambda";
 import { Contract, JsonRpcProvider, Wallet } from "ethers";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
@@ -9,7 +9,6 @@ import {
   RELAY_CONTRACTS,
   DYNAMODB_TABLE_TRANSACTIONS,
   SECRETS_MANAGER_SEED_KEY,
-  MAX_RETRY_ATTEMPTS,
 } from "@stablecoin-relay/shared";
 import type { RelayStatusValue } from "@stablecoin-relay/shared";
 import { logger } from "@stablecoin-relay/shared";

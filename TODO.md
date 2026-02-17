@@ -80,4 +80,4 @@
 - [x] **9.3** Add CloudWatch alarms: failed relays > 5/min, queue depth > 100, wallet balance < threshold
 - [x] **9.4** Add rate limiting (per IP, per sender address) to API Gateway
 - [x] **9.5** Write API documentation with example curl commands for each endpoint
-- [ ] **9.6** Final review: run full test suite, lint, verify all deployed contracts and endpoints, commit and tag `v0.1.0`
+- [x] **9.6** Final review: run full test suite, lint, verify all deployed contracts and endpoints, commit and tag `v0.1.0`

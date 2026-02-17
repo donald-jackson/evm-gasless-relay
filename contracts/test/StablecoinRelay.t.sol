@@ -26,8 +26,7 @@ contract StablecoinRelayTest is Test {
         recipient = makeAddr("recipient");
         relayer = makeAddr("relayer");
 
-        // Deploy with a dummy permit2 address (not used in permit tests)
-        relay = new StablecoinRelay(address(0));
+        relay = new StablecoinRelay();
         token = new MockERC20Permit("USD Coin", "USDC", 6);
 
         token.mint(user, INITIAL_BALANCE);

@@ -9,9 +9,6 @@ export interface RelayRequest {
   v: number;
   r: string;
   s: string;
-  usePermit2?: boolean;
-  permit2Nonce?: string;
-  permit2Signature?: string;
 }
 
 export interface RelayQuote {

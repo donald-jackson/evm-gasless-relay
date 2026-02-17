@@ -2,7 +2,6 @@ export interface TokenConfig {
   readonly symbol: string;
   readonly address: string;
   readonly decimals: number;
-  readonly hasNativePermit: boolean;
 }
 
 export interface DexConfig {
@@ -33,13 +32,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         symbol: "USDC",
         address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
         decimals: 6,
-        hasNativePermit: true,
-      },
-      USDT: {
-        symbol: "USDT",
-        address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-        decimals: 6,
-        hasNativePermit: false, // Must use Permit2
       },
     },
     dex: {
@@ -59,13 +51,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         symbol: "USDC",
         address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
         decimals: 6,
-        hasNativePermit: true,
-      },
-      USDT: {
-        symbol: "USDT",
-        address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
-        decimals: 6,
-        hasNativePermit: false,
       },
     },
     dex: {
@@ -85,13 +70,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         symbol: "USDC",
         address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
         decimals: 6,
-        hasNativePermit: true,
-      },
-      USDT: {
-        symbol: "USDT",
-        address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
-        decimals: 6,
-        hasNativePermit: false,
       },
     },
     dex: {
@@ -111,13 +89,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         symbol: "USDC",
         address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
         decimals: 6,
-        hasNativePermit: true,
-      },
-      USDT: {
-        symbol: "USDT",
-        address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
-        decimals: 6,
-        hasNativePermit: false,
       },
     },
     dex: {
@@ -137,7 +108,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         symbol: "USDC",
         address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         decimals: 6,
-        hasNativePermit: true,
       },
     },
     dex: {
@@ -145,32 +115,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
       quoterV2Address: "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
     },
     confirmationBlocks: 1,
-  },
-  56: {
-    chainId: 56,
-    name: "BSC",
-    nativeToken: "BNB",
-    rpcUrl: "https://bsc-dataseed.binance.org",
-    blockExplorer: "https://bscscan.com",
-    tokens: {
-      USDC: {
-        symbol: "USDC",
-        address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
-        decimals: 18,
-        hasNativePermit: false,
-      },
-      USDT: {
-        symbol: "USDT",
-        address: "0x55d398326f99059fF775485246999027B3197955",
-        decimals: 18,
-        hasNativePermit: false,
-      },
-    },
-    dex: {
-      name: "PancakeSwap V3",
-      quoterV2Address: "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997",
-    },
-    confirmationBlocks: 3,
   },
   43114: {
     chainId: 43114,
@@ -183,13 +127,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         symbol: "USDC",
         address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
         decimals: 6,
-        hasNativePermit: true,
-      },
-      USDT: {
-        symbol: "USDT",
-        address: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
-        decimals: 6,
-        hasNativePermit: false,
       },
     },
     dex: {
@@ -209,7 +146,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         symbol: "USDC",
         address: "0x176211869cA2b568f2A7D4EE941E073a821EE1ff",
         decimals: 6,
-        hasNativePermit: true,
       },
     },
     dex: {
@@ -229,7 +165,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         symbol: "USDC",
         address: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4",
         decimals: 6,
-        hasNativePermit: true,
       },
     },
     dex: {
@@ -249,7 +184,6 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
         symbol: "USDC",
         address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
         decimals: 6,
-        hasNativePermit: true,
       },
     },
     dex: {
@@ -257,6 +191,25 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
       quoterV2Address: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
     },
     confirmationBlocks: 2,
+  },
+  84532: {
+    chainId: 84532,
+    name: "Base Sepolia",
+    nativeToken: "ETH",
+    rpcUrl: "https://sepolia.base.org",
+    blockExplorer: "https://sepolia.basescan.org",
+    tokens: {
+      USDC: {
+        symbol: "USDC",
+        address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        decimals: 6,
+      },
+    },
+    dex: {
+      name: "Uniswap V3",
+      quoterV2Address: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+    },
+    confirmationBlocks: 1,
   },
 } as const;
 

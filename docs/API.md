@@ -22,13 +22,11 @@ Response:
       "nativeToken": "ETH",
       "blockExplorer": "https://etherscan.io",
       "relayContract": "0x...",
-      "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
       "tokens": [
         {
           "symbol": "USDC",
           "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-          "decimals": 6,
-          "hasNativePermit": true
+          "decimals": 6
         }
       ]
     }
@@ -200,15 +198,14 @@ All errors follow this format:
 
 ## Supported Chains
 
-| Chain | ID | USDC | USDT |
-|-------|----|------|------|
-| Ethereum | 1 | Yes | Yes (Permit2) |
-| Polygon | 137 | Yes | Yes (Permit2) |
-| Arbitrum | 42161 | Yes | Yes (Permit2) |
-| Optimism | 10 | Yes | Yes (Permit2) |
-| Base | 8453 | Yes | — |
-| BSC | 56 | Yes (Permit2) | Yes (Permit2) |
-| Avalanche | 43114 | Yes | Yes (Permit2) |
-| Linea | 59144 | Yes | — |
-| Scroll | 534352 | Yes | — |
-| Sepolia | 11155111 | Yes | — |
+| Chain | ID | USDC |
+|-------|----|------|
+| Ethereum | 1 | Yes |
+| Polygon | 137 | Yes |
+| Arbitrum | 42161 | Yes |
+| Optimism | 10 | Yes |
+| Base | 8453 | Yes |
+| Avalanche | 43114 | Yes |
+| Linea | 59144 | Yes |
+| Scroll | 534352 | Yes |
+| Sepolia | 11155111 | Yes |

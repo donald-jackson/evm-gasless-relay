@@ -1,15 +1,8 @@
 export const STABLECOIN_RELAY_ABI = [
   {
     type: "constructor",
-    inputs: [{ name: "_permit2", type: "address" }],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "PERMIT2",
     inputs: [],
-    outputs: [{ name: "", type: "address" }],
-    stateMutability: "view",
+    stateMutability: "nonpayable",
   },
   {
     type: "function",
@@ -45,22 +38,6 @@ export const STABLECOIN_RELAY_ABI = [
       { name: "v", type: "uint8" },
       { name: "r", type: "bytes32" },
       { name: "s", type: "bytes32" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "relayWithPermit2",
-    inputs: [
-      { name: "token", type: "address" },
-      { name: "from", type: "address" },
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
-      { name: "fee", type: "uint256" },
-      { name: "nonce", type: "uint256" },
-      { name: "deadline", type: "uint256" },
-      { name: "signature", type: "bytes" },
     ],
     outputs: [],
     stateMutability: "nonpayable",

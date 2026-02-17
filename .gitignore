@@ -18,6 +18,7 @@ cdk.out/
 # Foundry
 contracts/out/
 contracts/cache/
+contracts/broadcast/
 
 # IDE
 .idea/
@@ -39,3 +40,6 @@ lcov.info
 
 # Serena
 .serena/
+
+# Claude
+.claude/

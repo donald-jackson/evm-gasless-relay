@@ -1,6 +1,6 @@
 import { Contract, InterfaceAbi, type Provider, type Signer } from "ethers";
 import { STABLECOIN_RELAY_ABI, ERC20_ABI } from "./abi.js";
-import { RELAY_CONTRACTS, PERMIT2_ADDRESS } from "./addresses.js";
+import { RELAY_CONTRACTS } from "./addresses.js";
 
 export function getRelayContract(chainId: number, signerOrProvider: Signer | Provider): Contract {
   const address = RELAY_CONTRACTS[chainId];
@@ -16,5 +16,3 @@ export function getErc20Contract(
 ): Contract {
   return new Contract(tokenAddress, ERC20_ABI as InterfaceAbi, signerOrProvider);
 }
-
-export { PERMIT2_ADDRESS };

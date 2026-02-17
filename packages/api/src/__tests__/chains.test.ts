@@ -42,7 +42,7 @@ describe("GET /chains", () => {
 
     const body = JSON.parse(response.body);
     expect(body.chains).toBeInstanceOf(Array);
-    expect(body.chains.length).toBeGreaterThanOrEqual(10);
+    expect(body.chains.length).toBeGreaterThanOrEqual(9);
   });
 
   it("includes CORS headers", async () => {
@@ -61,7 +61,6 @@ describe("GET /chains", () => {
       expect(chain).toHaveProperty("name");
       expect(chain).toHaveProperty("nativeToken");
       expect(chain).toHaveProperty("tokens");
-      expect(chain).toHaveProperty("permit2");
       expect(chain.tokens.length).toBeGreaterThan(0);
     }
   });

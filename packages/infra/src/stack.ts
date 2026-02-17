@@ -135,6 +135,21 @@ export class StablecoinRelayStack extends cdk.Stack {
       },
     });
 
+    // Rate limiting via default stage throttle settings
+    const defaultStage = httpApi.defaultStage?.node.defaultChild as apigatewayv2.CfnStage;
+    defaultStage.defaultRouteSettings = {
+      throttlingBurstLimit: 50, // Max concurrent requests
+      throttlingRateLimit: 100, // Requests per second
+    };
+
+    // Per-route throttle overrides for submit (more restrictive)
+    defaultStage.routeSettings = {
+      "POST /relay/submit": {
+        throttlingBurstLimit: 10,
+        throttlingRateLimit: 20, // 20 relay submissions per second max
+      },
+    };
+
     httpApi.addRoutes({
       path: "/chains",
       methods: [apigatewayv2.HttpMethod.GET],

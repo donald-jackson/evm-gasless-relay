@@ -21,7 +21,7 @@
 - [x] **2.4** Write Foundry unit tests for `relayWithPermit` happy path (mock ERC20 with permit)
 - [x] **2.5** Write Foundry tests for edge cases: expired deadline, invalid signature, paused contract, insufficient balance
 - [x] **2.6** Write Foundry test for `relayWithPermit2` using Permit2 mock
-- [ ] **2.7** Create `script/Deploy.s.sol` deployment script; verify it works with `forge script --dry-run`
+- [x] **2.7** Create `script/Deploy.s.sol` deployment script; verify it works with `forge script --dry-run`
 - [ ] **2.8** Deploy `StablecoinRelay.sol` to Sepolia; record contract address in `packages/shared/src/addresses.ts`
 
 ## 3 · Shared Package

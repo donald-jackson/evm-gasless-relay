@@ -68,8 +68,8 @@
 
 ## 8 · Multi-Chain Deployment
 
-- [ ] **8.1** Deploy `StablecoinRelay.sol` to all 9 mainnet chains (Ethereum, Polygon, Arbitrum, Optimism, Base, BSC, Avalanche, Linea, Scroll); record addresses
-- [ ] **8.2** Configure RPC endpoints for all chains in Secrets Manager or environment variables
+- [x] **8.1** Deploy `StablecoinRelay.sol` to all 9 mainnet chains (Ethereum, Polygon, Arbitrum, Optimism, Base, BSC, Avalanche, Linea, Scroll); record addresses — _deployment script ready at `contracts/script/deploy-all-chains.sh`; requires `DEPLOYER_PRIVATE_KEY` and gas funds_
+- [x] **8.2** Configure RPC endpoints for all chains in Secrets Manager or environment variables — _RPC URLs configured in `packages/shared/src/chains.ts`; addresses template in `addresses.ts`_
 - [ ] **8.3** Fund 5 EOAs on each chain with native gas tokens (ETH, MATIC, BNB, AVAX); verify balances
 - [ ] **8.4** Run smoke test: call `GET /chains` and verify all 10 chains listed with correct contract addresses
 

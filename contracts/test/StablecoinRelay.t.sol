@@ -132,6 +132,103 @@ contract StablecoinRelayTest is Test {
         assertEq(token.balanceOf(relayer), 0);
     }
 
+    // --- Edge case tests (2.5) ---
+
+    function test_relayWithPermit_revert_expiredDeadline() public {
+        uint256 deadline = block.timestamp - 1; // already expired
+        uint256 permitAmount = AMOUNT + FEE;
+
+        bytes32 permitHash = _getPermitHash(
+            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+
+        vm.prank(relayer);
+        vm.expectRevert();
+        relay.relayWithPermit(address(token), user, recipient, AMOUNT, FEE, deadline, v, r, s);
+    }
+
+    function test_relayWithPermit_revert_invalidSignature() public {
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 permitAmount = AMOUNT + FEE;
+
+        // Sign with wrong private key
+        uint256 wrongKey = 0xBEEF;
+        bytes32 permitHash = _getPermitHash(
+            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, permitHash);
+
+        vm.prank(relayer);
+        vm.expectRevert();
+        relay.relayWithPermit(address(token), user, recipient, AMOUNT, FEE, deadline, v, r, s);
+    }
+
+    function test_relayWithPermit_revert_whenPaused() public {
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 permitAmount = AMOUNT + FEE;
+
+        bytes32 permitHash = _getPermitHash(
+            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+
+        // Owner pauses the contract
+        relay.pause();
+
+        vm.prank(relayer);
+        vm.expectRevert();
+        relay.relayWithPermit(address(token), user, recipient, AMOUNT, FEE, deadline, v, r, s);
+    }
+
+    function test_relayWithPermit_revert_insufficientBalance() public {
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 bigAmount = INITIAL_BALANCE; // amount + fee > balance
+        uint256 fee = 1e6;
+        uint256 permitAmount = bigAmount + fee;
+
+        bytes32 permitHash = _getPermitHash(
+            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+
+        vm.prank(relayer);
+        vm.expectRevert();
+        relay.relayWithPermit(address(token), user, recipient, bigAmount, fee, deadline, v, r, s);
+    }
+
+    function test_withdrawFees_onlyOwner() public {
+        // Non-owner cannot withdraw
+        vm.prank(relayer);
+        vm.expectRevert();
+        relay.withdrawFees(address(token), relayer);
+    }
+
+    function test_pause_onlyOwner() public {
+        vm.prank(relayer);
+        vm.expectRevert();
+        relay.pause();
+    }
+
+    function test_unpause_afterPause() public {
+        relay.pause();
+        relay.unpause();
+
+        // Should work after unpause
+        uint256 deadline = block.timestamp + 1 hours;
+        uint256 permitAmount = AMOUNT + FEE;
+
+        bytes32 permitHash = _getPermitHash(
+            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+
+        vm.prank(relayer);
+        relay.relayWithPermit(address(token), user, recipient, AMOUNT, FEE, deadline, v, r, s);
+
+        assertEq(token.balanceOf(recipient), AMOUNT);
+    }
+
     // Helper to build the EIP-2612 permit digest
     function _getPermitHash(
         address tokenAddr,

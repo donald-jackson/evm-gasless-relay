@@ -10,6 +10,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@stablecoin-relay/shared": "workspace:*"
+    "@stablecoin-relay/shared": "workspace:*",
+    "aws-cdk-lib": "^2.238.0",
+    "constructs": "^10.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3"
   }
 }

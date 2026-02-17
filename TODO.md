@@ -59,11 +59,11 @@
 
 ## 7 · Infrastructure (AWS CDK)
 
-- [ ] **7.1** Initialise CDK app in `packages/infra` with TypeScript; define `StablecoinRelayStack`
-- [ ] **7.2** Define DynamoDB tables: `Transactions` (PK: requestId), `WalletPool` (PK: chainId, SK: address), `Nonces` (PK: chainId#address)
-- [ ] **7.3** Define API Gateway HTTP API with Lambda integrations for all API handlers; output the API URL
-- [ ] **7.4** Define SQS queue `relay-requests` with dead-letter queue; define Lambda consumer for relay worker
-- [ ] **7.5** Define Secrets Manager secret for HD wallet seed phrase; grant read access to worker Lambda
+- [x] **7.1** Initialise CDK app in `packages/infra` with TypeScript; define `StablecoinRelayStack`
+- [x] **7.2** Define DynamoDB tables: `Transactions` (PK: requestId), `WalletPool` (PK: chainId, SK: address), `Nonces` (PK: chainId#address)
+- [x] **7.3** Define API Gateway HTTP API with Lambda integrations for all API handlers; output the API URL
+- [x] **7.4** Define SQS queue `relay-requests` with dead-letter queue; define Lambda consumer for relay worker
+- [x] **7.5** Define Secrets Manager secret for HD wallet seed phrase; grant read access to worker Lambda
 - [ ] **7.6** Run `cdk deploy --profile Engineering-Playground/AdministratorAccess` to Sepolia-only stack; verify API Gateway URL responds
 
 ## 8 · Multi-Chain Deployment

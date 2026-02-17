@@ -6,6 +6,8 @@ import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as eventsources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as logs from "aws-cdk-lib/aws-logs";
 import type { Construct } from "constructs";
 
 export class StablecoinRelayStack extends cdk.Stack {
@@ -161,6 +163,71 @@ export class StablecoinRelayStack extends cdk.Stack {
       path: "/health",
       methods: [apigatewayv2.HttpMethod.GET],
       integration: new integrations.HttpLambdaIntegration("HealthIntegration", healthHandler),
+    });
+
+    // --- CloudWatch Alarms ---
+
+    // Worker errors (failed relays > 5 per minute)
+    const workerErrorMetric = workerHandler.metricErrors({
+      period: cdk.Duration.minutes(1),
+      statistic: "Sum",
+    });
+    new cloudwatch.Alarm(this, "WorkerErrorAlarm", {
+      alarmName: "stablecoin-relay-worker-errors",
+      alarmDescription: "Worker Lambda errors exceed 5 per minute",
+      metric: workerErrorMetric,
+      threshold: 5,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // Queue depth > 100 messages
+    const queueDepthMetric = relayQueue.metricApproximateNumberOfMessagesVisible({
+      period: cdk.Duration.minutes(1),
+      statistic: "Maximum",
+    });
+    new cloudwatch.Alarm(this, "QueueDepthAlarm", {
+      alarmName: "stablecoin-relay-queue-depth",
+      alarmDescription: "SQS queue depth exceeds 100 messages",
+      metric: queueDepthMetric,
+      threshold: 100,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    // DLQ messages (messages landing in dead letter queue)
+    const dlqDepthMetric = dlq.metricApproximateNumberOfMessagesVisible({
+      period: cdk.Duration.minutes(5),
+      statistic: "Sum",
+    });
+    new cloudwatch.Alarm(this, "DLQAlarm", {
+      alarmName: "stablecoin-relay-dlq-messages",
+      alarmDescription: "Messages appearing in dead letter queue",
+      metric: dlqDepthMetric,
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    });
+
+    // Metric filter for "Relay failed" log entries from worker
+    const workerLogGroup = workerHandler.logGroup;
+    const failedRelayMetricFilter = new logs.MetricFilter(this, "FailedRelayMetricFilter", {
+      logGroup: workerLogGroup,
+      filterPattern: logs.FilterPattern.literal('"Relay failed"'),
+      metricNamespace: "StablecoinRelay",
+      metricName: "FailedRelays",
+      metricValue: "1",
+    });
+    new cloudwatch.Alarm(this, "FailedRelayAlarm", {
+      alarmName: "stablecoin-relay-failed-relays",
+      alarmDescription: "Failed relay transactions detected in worker logs",
+      metric: failedRelayMetricFilter.metric({
+        period: cdk.Duration.minutes(5),
+        statistic: "Sum",
+      }),
+      threshold: 5,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
     // --- Outputs ---

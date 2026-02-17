@@ -77,7 +77,7 @@
 
 - [x] **9.1** Write E2E integration test on Sepolia: sign a USDC permit, submit via API, wait for confirmation, verify token transfer on-chain
 - [x] **9.2** Add structured JSON logging (request correlation IDs, chain, amount, fee, duration) to all handlers and workers
-- [ ] **9.3** Add CloudWatch alarms: failed relays > 5/min, queue depth > 100, wallet balance < threshold
+- [x] **9.3** Add CloudWatch alarms: failed relays > 5/min, queue depth > 100, wallet balance < threshold
 - [ ] **9.4** Add rate limiting (per IP, per sender address) to API Gateway
 - [ ] **9.5** Write API documentation with example curl commands for each endpoint
 - [ ] **9.6** Final review: run full test suite, lint, verify all deployed contracts and endpoints, commit and tag `v0.1.0`

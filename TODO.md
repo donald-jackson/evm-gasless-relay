@@ -75,7 +75,7 @@
 
 ## 9 · Testing & Polish
 
-- [ ] **9.1** Write E2E integration test on Sepolia: sign a USDC permit, submit via API, wait for confirmation, verify token transfer on-chain
+- [x] **9.1** Write E2E integration test on Sepolia: sign a USDC permit, submit via API, wait for confirmation, verify token transfer on-chain
 - [ ] **9.2** Add structured JSON logging (request correlation IDs, chain, amount, fee, duration) to all handlers and workers
 - [ ] **9.3** Add CloudWatch alarms: failed relays > 5/min, queue depth > 100, wallet balance < threshold
 - [ ] **9.4** Add rate limiting (per IP, per sender address) to API Gateway

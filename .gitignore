@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+out/
+cache/
+cdk.out/
+*.js.map
+*.d.ts
+!packages/infra/bin/*.d.ts
+
+# Foundry
+contracts/out/
+contracts/cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Coverage
+coverage/
+lcov.info
+
+# Serena
+.serena/

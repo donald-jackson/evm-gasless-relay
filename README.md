@@ -389,6 +389,62 @@ scripts/
   check-wallet-balances.mjs  Check relayer wallet balances across all chains
 ```
 
+## Deployment
+
+Two scripts handle the full AWS deployment lifecycle. Both require an AWS named profile.
+
+### Deploy
+
+```bash
+./deploy.sh --profile <aws-profile> [--region us-east-1] [--skip-contracts] [--chains 1,8453,11155111,84532]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--profile` | AWS named profile (required) |
+| `--region` | AWS region (default: `us-east-1`) |
+| `--skip-contracts` | Skip Foundry contract deployment |
+| `--chains` | Comma-separated chain IDs (default: `1,8453,11155111,84532`) |
+
+The script runs 10 steps in order:
+
+1. Validates prerequisites (`node`, `pnpm`, `aws`, `cdk`, and `forge` unless `--skip-contracts`)
+2. Installs dependencies and builds all packages
+3. Deploys contracts via Foundry (requires `DEPLOYER_PRIVATE_KEY` env var)
+4. Bootstraps CDK (idempotent)
+5. Deploys the CloudFormation stack (API Gateway, Lambda, SQS, DynamoDB, Secrets Manager)
+6. Bundles all 6 Lambda handlers with esbuild
+7. Uploads Lambda code and waits for functions to become active
+8. Stores HD wallet seed phrase in Secrets Manager (prompts if not already set)
+9. Seeds the wallet pool in DynamoDB
+10. Verifies `/health` and `/chains` endpoints
+
+Example — deploy infrastructure only (no contracts):
+
+```bash
+./deploy.sh --profile Engineering-Playground/AdministratorAccess --skip-contracts
+```
+
+### Destroy
+
+```bash
+./destroy.sh --profile <aws-profile> [--region us-east-1] [--force]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--profile` | AWS named profile (required) |
+| `--region` | AWS region (default: `us-east-1`) |
+| `--force` | Skip confirmation prompt |
+
+This tears down all AWS resources: CloudFormation stack (Lambdas, API Gateway, DynamoDB tables, SQS queues, CloudWatch alarms, IAM roles), the Secrets Manager secret, and local Lambda bundles.
+
+On-chain contracts cannot be destroyed — they can only be paused by the contract owner.
+
+```bash
+./destroy.sh --profile Engineering-Playground/AdministratorAccess
+```
+
 ## Security Considerations
 
 - The relay contract is `Ownable` and `Pausable` — the owner can pause relaying and withdraw accumulated fees

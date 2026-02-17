@@ -123,49 +123,56 @@ async function main() {
 
   // 5. Seed each chain
   const rows = [];
+  const failedChains = [];
   for (const chainId of chainIds) {
     const info = CHAIN_INFO[chainId];
     console.log(`\nSeeding ${info.name} (chainId ${chainId})...`);
-    const provider = new JsonRpcProvider(info.rpcUrl, chainId);
 
-    for (const wallet of wallets) {
-      const [balance, nonce] = await Promise.all([
-        provider.getBalance(wallet.address),
-        provider.getTransactionCount(wallet.address),
-      ]);
+    try {
+      const provider = new JsonRpcProvider(info.rpcUrl, chainId);
 
-      const balanceWei = balance.toString();
+      for (const wallet of wallets) {
+        const [balance, nonce] = await Promise.all([
+          provider.getBalance(wallet.address),
+          provider.getTransactionCount(wallet.address),
+        ]);
 
-      // Write WalletPool entry
-      await ddbClient.send(
-        new PutCommand({
-          TableName: TABLE_WALLET_POOL,
-          Item: {
-            chainId,
-            address: wallet.address,
-            status: "available",
-            derivationIndex: wallet.index,
-            lastUsed: new Date().toISOString(),
-            balanceWei,
-            currentNonce: nonce,
-          },
-        }),
-      );
+        const balanceWei = balance.toString();
 
-      // Write Nonces entry (don't overwrite existing)
-      const noncePk = `${chainId}#${wallet.address}`;
-      await ddbClient.send(
-        new UpdateCommand({
-          TableName: TABLE_NONCES,
-          Key: { pk: noncePk },
-          UpdateExpression: "SET currentNonce = if_not_exists(currentNonce, :nonce)",
-          ExpressionAttributeValues: { ":nonce": nonce },
-        }),
-      );
+        // Write WalletPool entry
+        await ddbClient.send(
+          new PutCommand({
+            TableName: TABLE_WALLET_POOL,
+            Item: {
+              chainId,
+              address: wallet.address,
+              status: "available",
+              derivationIndex: wallet.index,
+              lastUsed: new Date().toISOString(),
+              balanceWei,
+              currentNonce: nonce,
+            },
+          }),
+        );
 
-      const balanceFmt = formatEther(balance);
-      const status = balance === 0n ? "NEEDS FUNDING" : "OK";
-      rows.push({ index: wallet.index, address: wallet.address, chain: info.name, balance: `${balanceFmt} ${info.nativeToken}`, nonce, status });
+        // Write Nonces entry (don't overwrite existing)
+        const noncePk = `${chainId}#${wallet.address}`;
+        await ddbClient.send(
+          new UpdateCommand({
+            TableName: TABLE_NONCES,
+            Key: { pk: noncePk },
+            UpdateExpression: "SET currentNonce = if_not_exists(currentNonce, :nonce)",
+            ExpressionAttributeValues: { ":nonce": nonce },
+          }),
+        );
+
+        const balanceFmt = formatEther(balance);
+        const status = balance === 0n ? "NEEDS FUNDING" : "OK";
+        rows.push({ index: wallet.index, address: wallet.address, chain: info.name, balance: `${balanceFmt} ${info.nativeToken}`, nonce, status });
+      }
+    } catch (err) {
+      console.error(`  [WARN] Failed to seed ${info.name} (chainId ${chainId}): ${err.message ?? err}`);
+      failedChains.push(info.name);
     }
   }
 
@@ -193,11 +200,15 @@ async function main() {
     );
   }
 
+  if (failedChains.length > 0) {
+    console.log(`\nWarning: Failed to seed ${failedChains.length} chain(s): ${failedChains.join(", ")} (RPC may be rate-limited — re-run to retry)`);
+  }
+
   const needsFunding = rows.filter((r) => r.status === "NEEDS FUNDING").length;
   if (needsFunding > 0) {
     console.log(`\nWarning: ${needsFunding} wallet(s) need funding before they can relay transactions.`);
-  } else {
-    console.log("\nAll wallets funded and ready.");
+  } else if (rows.length > 0) {
+    console.log("\nAll seeded wallets funded and ready.");
   }
 }
 

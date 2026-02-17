@@ -44,7 +44,7 @@
 
 - [x] **5.1** Implement HD wallet derivation: from seed phrase derive 5 EOAs (indices 0–4) per chain using ethers.js `HDNodeWallet`
 - [x] **5.2** Implement nonce manager: track per-address nonce in DynamoDB with atomic counter updates to prevent collisions
-- [ ] **5.3** Implement pool manager: track EOA status (available/busy/cooldown) in DynamoDB, select available wallet for relay
+- [x] **5.3** Implement pool manager: track EOA status (available/busy/cooldown) in DynamoDB, select available wallet for relay
 - [ ] **5.4** Implement relay worker: receive SQS message, select EOA, build + sign + send `relayWithPermit` transaction, update status
 - [ ] **5.5** Implement transaction confirmation watcher: poll for receipt, update DynamoDB status (pending → confirmed / failed)
 - [ ] **5.6** Implement retry logic: on revert or timeout, retry with bumped gas price (up to 3 attempts), then mark failed

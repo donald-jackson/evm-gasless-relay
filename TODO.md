@@ -15,7 +15,7 @@
 
 ## 2 · Smart Contract
 
-- [ ] **2.1** Write `src/StablecoinRelay.sol`: `relayWithPermit(address token, address from, address to, uint256 amount, uint256 fee, uint256 deadline, uint8 v, bytes32 r, bytes32 s)` using EIP-2612 `permit` + `transferFrom`
+- [x] **2.1** Write `src/StablecoinRelay.sol`: `relayWithPermit(address token, address from, address to, uint256 amount, uint256 fee, uint256 deadline, uint8 v, bytes32 r, bytes32 s)` using EIP-2612 `permit` + `transferFrom`
 - [ ] **2.2** Add `relayWithPermit2(...)` variant accepting Permit2 signatures for tokens without native permit support
 - [ ] **2.3** Add owner-only `withdrawFees(address token, address to)` and `pause()`/`unpause()` functions
 - [ ] **2.4** Write Foundry unit tests for `relayWithPermit` happy path (mock ERC20 with permit)

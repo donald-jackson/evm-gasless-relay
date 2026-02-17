@@ -17,10 +17,18 @@
     "@typescript-eslint/eslint-plugin": "^8.56.0",
     "@typescript-eslint/parser": "^8.56.0",
     "aws-cdk": "^2.1106.0",
+    "esbuild": "^0.27.3",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
+    "ethers": "^6",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.991.0",
+    "@aws-sdk/client-secrets-manager": "^3.991.0",
+    "@aws-sdk/credential-providers": "^3.991.0",
+    "@aws-sdk/lib-dynamodb": "^3.991.0"
   }
 }

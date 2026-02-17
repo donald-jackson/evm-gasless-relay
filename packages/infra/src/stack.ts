@@ -6,6 +6,7 @@ import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as eventsources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+// import * as wafv2 from "aws-cdk-lib/aws-wafv2"; // TODO: re-enable with WAF
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as logs from "aws-cdk-lib/aws-logs";
 import type { Construct } from "constructs";
@@ -142,14 +143,6 @@ export class StablecoinRelayStack extends cdk.Stack {
       throttlingRateLimit: 100, // Requests per second
     };
 
-    // Per-route throttle overrides for submit (more restrictive)
-    defaultStage.routeSettings = {
-      "POST /relay/submit": {
-        throttlingBurstLimit: 10,
-        throttlingRateLimit: 20, // 20 relay submissions per second max
-      },
-    };
-
     httpApi.addRoutes({
       path: "/chains",
       methods: [apigatewayv2.HttpMethod.GET],
@@ -179,6 +172,10 @@ export class StablecoinRelayStack extends cdk.Stack {
       methods: [apigatewayv2.HttpMethod.GET],
       integration: new integrations.HttpLambdaIntegration("HealthIntegration", healthHandler),
     });
+
+    // --- WAF WebACL ---
+    // TODO: WAFv2 association with HTTP API $default stage causes CloudFormation
+    // validation errors. Re-enable once using a named stage or custom resource.
 
     // --- CloudWatch Alarms ---
 
@@ -244,6 +241,8 @@ export class StablecoinRelayStack extends cdk.Stack {
       evaluationPeriods: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
+
+    // TODO: WAF blocked requests alarm — re-enable with WAF WebACL above
 
     // --- Outputs ---
 

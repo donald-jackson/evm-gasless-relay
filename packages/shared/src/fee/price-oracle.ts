@@ -42,6 +42,7 @@ const WRAPPED_NATIVE: Record<number, string> = {
   59144: "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f", // WETH
   534352: "0x5300000000000000000000000000000000000004", // WETH
   11155111: "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9", // WETH Sepolia
+  84532: "0x4200000000000000000000000000000000000006", // WETH Base Sepolia
 };
 
 // Pool fee tier to use for price queries (0.3% = 3000)
@@ -110,6 +111,7 @@ export async function getNativeTokenPrice(chainId: number): Promise<number> {
       59144: 3000,
       534352: 3000,
       11155111: 3000,
+      84532: 3000,
     };
     return fallbackPrices[chainId] ?? 3000;
   }

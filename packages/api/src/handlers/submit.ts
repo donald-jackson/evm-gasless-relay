@@ -11,6 +11,7 @@ import {
   DYNAMODB_TABLE_TRANSACTIONS,
   MIN_RELAY_AMOUNT,
   MAX_RELAY_AMOUNT,
+  isBlockedAddress,
 } from "@stablecoin-relay/shared";
 import type { TransactionRecord } from "@stablecoin-relay/shared";
 import { logger } from "@stablecoin-relay/shared";
@@ -48,6 +49,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
 
     const { chainId, token, from, to, amount, fee, deadline, v, r, s } = parsed.data;
+
+    // OFAC sanctions check
+    if (isBlockedAddress(from) || isBlockedAddress(to)) {
+      logger.warn("Blocked sanctioned address", { handler: "submit", correlationId });
+      return errorResponse(403, "Forbidden");
+    }
 
     // Validate chain + token
     const chain = getChainConfig(chainId);

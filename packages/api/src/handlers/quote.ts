@@ -4,9 +4,8 @@ import {
   getChainConfig,
   SUPPORTED_CHAIN_IDS,
   QUOTE_EXPIRY_MS,
-  FEE_MARGIN,
-  MIN_FEE_USDC,
-  DEFAULT_GAS_ESTIMATE,
+  calculateFee,
+  isBlockedAddress,
 } from "@stablecoin-relay/shared";
 import { logger } from "@stablecoin-relay/shared";
 import { jsonResponse, errorResponse } from "../response.js";
@@ -31,7 +30,14 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return errorResponse(400, "Invalid request", parsed.error.flatten());
     }
 
-    const { chainId, token, amount } = parsed.data;
+    const { chainId, token, amount, sender, recipient } = parsed.data;
+
+    // OFAC sanctions check
+    if (isBlockedAddress(sender) || isBlockedAddress(recipient)) {
+      logger.warn("Blocked sanctioned address", { handler: "quote" });
+      return errorResponse(403, "Forbidden");
+    }
+
     const chain = getChainConfig(chainId);
 
     // Verify token is supported on this chain
@@ -42,21 +48,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return errorResponse(400, `Token ${token} not supported on ${chain.name}`);
     }
 
-    // Simplified fee calculation (real implementation calls gas price oracle + DEX quoter)
-    // For now, use defaults — fee system (section 6) will provide real values
-    const gasEstimate = DEFAULT_GAS_ESTIMATE;
-    const gasPriceGwei = "30"; // placeholder
-    const nativeTokenPriceUsd = "3000.00"; // placeholder
-
-    // fee = gasEstimate * gasPrice * nativePrice * (1 + margin), converted to token units
-    const gasCostWei = gasEstimate * BigInt(gasPriceGwei) * 1_000_000_000n;
-    const gasCostUsd =
-      (Number(gasCostWei) / 1e18) * Number(nativeTokenPriceUsd);
-    const feeUsd = gasCostUsd * (1 + FEE_MARGIN);
-    const feeInTokenUnits = BigInt(
-      Math.ceil(feeUsd * 10 ** tokenConfig.decimals),
-    );
-    const fee = feeInTokenUnits < MIN_FEE_USDC ? MIN_FEE_USDC : feeInTokenUnits;
+    const feeData = await calculateFee(chainId, tokenConfig);
+    const fee = feeData.fee;
 
     const totalRequired = BigInt(amount) + fee;
     const expiresAt = new Date(Date.now() + QUOTE_EXPIRY_MS).toISOString();
@@ -75,9 +68,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       token,
       fee: fee.toString(),
       totalRequired: totalRequired.toString(),
-      gasEstimate: gasEstimate.toString(),
-      gasPriceGwei,
-      nativeTokenPriceUsd,
+      gasEstimate: feeData.gasEstimate.toString(),
+      gasPriceGwei: feeData.gasPriceGwei,
+      nativeTokenPriceUsd: feeData.nativeTokenPriceUsd,
       expiresAt,
     });
   } catch (err) {

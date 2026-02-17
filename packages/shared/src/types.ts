@@ -44,6 +44,8 @@ export interface PoolWallet {
   status: PoolWalletStatus;
   lastUsed?: string;
   derivationIndex: number;
+  balanceWei?: string;
+  currentNonce?: number;
 }
 
 export interface TransactionRecord {

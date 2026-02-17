@@ -91,6 +91,40 @@ describe("POST /relay/quote", () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it("rejects sanctioned sender address with 403", async () => {
+    const result = await handler(
+      makeEvent({
+        chainId: 11155111,
+        token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+        amount: "1000000",
+        sender: "0x722122dF12D4e14e13Ac3b6895a86e84145b6967", // Tornado Cash
+        recipient: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+      }),
+      {} as never,
+      () => {},
+    );
+
+    const response = result as { statusCode: number };
+    expect(response.statusCode).toBe(403);
+  });
+
+  it("rejects sanctioned recipient address with 403", async () => {
+    const result = await handler(
+      makeEvent({
+        chainId: 11155111,
+        token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+        amount: "1000000",
+        sender: "0x1234567890123456789012345678901234567890",
+        recipient: "0x098B716B8Aaf21512996dC57EB0615e2383E2f96", // Lazarus Group
+      }),
+      {} as never,
+      () => {},
+    );
+
+    const response = result as { statusCode: number };
+    expect(response.statusCode).toBe(403);
+  });
+
   it("rejects unsupported token on chain", async () => {
     const result = await handler(
       makeEvent({

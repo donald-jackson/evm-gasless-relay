@@ -13,8 +13,8 @@ import {
 import type { RelayStatusValue } from "@stablecoin-relay/shared";
 import { logger } from "@stablecoin-relay/shared";
 import { deriveWallets, type DerivedWallet } from "./wallet.js";
-import { acquireWallet, releaseWallet } from "./pool.js";
-import { getAndIncrementNonce } from "./nonce.js";
+import { acquireWallet, releaseWallet, estimateMinBalance, updateWalletBalance } from "./pool.js";
+import { getAndIncrementNonce, decrementNonce, resetNonce } from "./nonce.js";
 import { waitForConfirmation } from "./confirmation.js";
 
 const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -59,14 +59,20 @@ async function updateTransactionStatus(
   status: RelayStatusValue,
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const updateParts = ["#status = :status", "updatedAt = :now"];
+  const updateParts = ["#status = :status", "#updatedAt = :now"];
+  const names: Record<string, string> = {
+    "#status": "status",
+    "#updatedAt": "updatedAt",
+  };
   const values: Record<string, unknown> = {
     ":status": status,
     ":now": new Date().toISOString(),
   };
 
   for (const [key, val] of Object.entries(extra)) {
-    updateParts.push(`${key} = :${key}`);
+    const nameRef = `#${key}`;
+    names[nameRef] = key;
+    updateParts.push(`${nameRef} = :${key}`);
     values[`:${key}`] = val;
   }
 
@@ -75,7 +81,7 @@ async function updateTransactionStatus(
       TableName: DYNAMODB_TABLE_TRANSACTIONS,
       Key: { requestId },
       UpdateExpression: `SET ${updateParts.join(", ")}`,
-      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeNames: names,
       ExpressionAttributeValues: values,
     }),
   );
@@ -112,6 +118,9 @@ async function processRelayMessage(msg: RelayMessage): Promise<void> {
     throw new Error(`No available wallet for chainId ${chainId}, requestId ${requestId}`);
   }
 
+  let nonceAcquired = false;
+  let txSubmitted = false;
+
   try {
     // Get the derived wallet that matches the pool wallet
     const seed = await getSeedPhrase();
@@ -128,7 +137,29 @@ async function processRelayMessage(msg: RelayMessage): Promise<void> {
     const relay = new Contract(relayAddress, STABLECOIN_RELAY_ABI, signer);
 
     // Get nonce from DynamoDB atomic counter
-    const nonce = await getAndIncrementNonce(chainId, poolWallet.address);
+    let nonce = await getAndIncrementNonce(chainId, poolWallet.address);
+    nonceAcquired = true;
+
+    // Pre-submit sanity check: balance vs estimated gas cost
+    const walletBalance = await provider.getBalance(poolWallet.address);
+    const minBalance = await estimateMinBalance(chainId);
+    if (walletBalance < minBalance) {
+      await updateWalletBalance(chainId, poolWallet.address, walletBalance.toString());
+      throw new Error(
+        `Relayer wallet ${poolWallet.address} has insufficient gas on chain ${chainId} ` +
+        `(balance: ${walletBalance}, required: ${minBalance})`,
+      );
+    }
+
+    // Pre-submit sanity check: nonce sync
+    const onChainNonce = await provider.getTransactionCount(poolWallet.address);
+    if (nonce < onChainNonce) {
+      logger.warn("Nonce drift detected, resyncing", {
+        requestId, chainId, dbNonce: nonce, onChainNonce, handler: "worker",
+      });
+      await resetNonce(chainId, poolWallet.address, onChainNonce + 1);
+      nonce = onChainNonce;
+    }
 
     await updateTransactionStatus(requestId, "pending", {
       relayerAddress: poolWallet.address,
@@ -138,6 +169,7 @@ async function processRelayMessage(msg: RelayMessage): Promise<void> {
     const tx = await relay.relayWithPermit(token, from, to, amount, fee, deadline, v, r, s, {
       nonce,
     });
+    txSubmitted = true;
 
     logger.info("Transaction submitted", {
       requestId,
@@ -154,6 +186,10 @@ async function processRelayMessage(msg: RelayMessage): Promise<void> {
     // Wait for confirmation
     await waitForConfirmation(requestId, tx.hash, chainId);
 
+    // Update wallet balance after successful relay
+    const postBalance = await provider.getBalance(poolWallet.address);
+    await updateWalletBalance(chainId, poolWallet.address, postBalance.toString());
+
     const durationMs = Date.now() - startTime;
     logger.info("Relay confirmed", {
       requestId,
@@ -165,6 +201,13 @@ async function processRelayMessage(msg: RelayMessage): Promise<void> {
       handler: "worker",
     });
   } catch (err: unknown) {
+    // Roll back nonce if we incremented it but never submitted to RPC
+    if (nonceAcquired && !txSubmitted) {
+      await decrementNonce(chainId, poolWallet.address).catch((e) =>
+        logger.warn("Failed to decrement nonce", { requestId, chainId, error: String(e), handler: "worker" }),
+      );
+    }
+
     const errorMsg = err instanceof Error ? err.message : String(err);
     logger.error("Relay failed", {
       requestId,

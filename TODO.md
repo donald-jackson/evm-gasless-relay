@@ -33,7 +33,7 @@
 
 ## 4 · API Handlers
 
-- [ ] **4.1** Create `GET /chains` handler returning supported chains with token lists and contract addresses
+- [x] **4.1** Create `GET /chains` handler returning supported chains with token lists and contract addresses
 - [ ] **4.2** Create `POST /relay/quote` handler: accept `{chainId, token, amount, sender, recipient}`, return estimated fee and expiry
 - [ ] **4.3** Create `POST /relay/submit` handler: accept signed permit + relay params, validate signature, enqueue to SQS, return `requestId`
 - [ ] **4.4** Create `GET /relay/status/{requestId}` handler: query DynamoDB, return `{status, txHash, fee, timestamps}`

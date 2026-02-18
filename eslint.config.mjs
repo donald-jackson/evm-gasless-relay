@@ -7,7 +7,7 @@ export default [
     ignores: ["**/dist/", "**/node_modules/", "**/out/", "**/cache/", "contracts/"],
   },
   {
-    files: ["**/*.ts"],
+    files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

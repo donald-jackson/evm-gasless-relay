@@ -203,13 +203,31 @@ CDK_OUTPUT=$(npx cdk deploy "$STACK_NAME" \
 echo "$CDK_OUTPUT" | tail -10
 ok "CDK deploy complete"
 
-# Extract API URL from outputs
+# Extract outputs
 API_URL=""
+WEB_BUCKET=""
+CF_DISTRIBUTION_ID=""
+CF_URL=""
 if [[ -f /tmp/cdk-outputs.json ]]; then
   API_URL=$(node -e "
     const out = require('/tmp/cdk-outputs.json');
     const stack = out['$STACK_NAME'] || {};
     console.log(stack.ApiUrl || '');
+  ")
+  WEB_BUCKET=$(node -e "
+    const out = require('/tmp/cdk-outputs.json');
+    const stack = out['$STACK_NAME'] || {};
+    console.log(stack.WebBucketName || '');
+  ")
+  CF_DISTRIBUTION_ID=$(node -e "
+    const out = require('/tmp/cdk-outputs.json');
+    const stack = out['$STACK_NAME'] || {};
+    console.log(stack.CloudFrontDistributionId || '');
+  ")
+  CF_URL=$(node -e "
+    const out = require('/tmp/cdk-outputs.json');
+    const stack = out['$STACK_NAME'] || {};
+    console.log(stack.CloudFrontUrl || '');
   ")
 fi
 
@@ -359,7 +377,37 @@ else
   echo "         node scripts/seed-wallet-pool.mjs --from-secrets-manager --profile $PROFILE --region $REGION --chains $CHAINS"
 fi
 
-# ─── Step 10: Verify ────────────────────────────────────────────────────────
+# ─── Step 10: Build & deploy SPA ───────────────────────────────────────────
+
+step "Build & deploy SPA"
+
+if [[ -n "$WEB_BUCKET" ]]; then
+  echo "  Building web SPA..."
+  VITE_API_URL="" pnpm --filter @stablecoin-relay/web build
+  ok "SPA build complete"
+
+  echo "  Syncing to S3: $WEB_BUCKET"
+  aws s3 sync packages/web/dist "s3://$WEB_BUCKET" \
+    --delete \
+    --profile "$PROFILE" \
+    --region "$REGION"
+  ok "S3 sync complete"
+
+  if [[ -n "$CF_DISTRIBUTION_ID" ]]; then
+    echo "  Invalidating CloudFront cache..."
+    aws cloudfront create-invalidation \
+      --distribution-id "$CF_DISTRIBUTION_ID" \
+      --paths "/*" \
+      --profile "$PROFILE" \
+      --no-cli-pager \
+      > /dev/null
+    ok "CloudFront invalidation created"
+  fi
+else
+  echo "  [WARN] No WebBucketName in stack outputs — skipping SPA deploy"
+fi
+
+# ─── Step 11: Verify ────────────────────────────────────────────────────────
 
 step "Verify deployment"
 
@@ -392,6 +440,9 @@ echo "  Deployment complete!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [[ -n "$API_URL" ]]; then
   echo "  API:      $API_URL"
+fi
+if [[ -n "$CF_URL" ]]; then
+  echo "  Web:      $CF_URL"
 fi
 echo "  Profile:  $PROFILE"
 echo "  Region:   $REGION"

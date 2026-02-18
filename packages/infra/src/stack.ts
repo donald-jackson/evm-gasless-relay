@@ -9,6 +9,9 @@ import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 // import * as wafv2 from "aws-cdk-lib/aws-wafv2"; // TODO: re-enable with WAF
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as logs from "aws-cdk-lib/aws-logs";
+import * as s3 from "aws-cdk-lib/aws-s3";
+import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
+import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import type { Construct } from "constructs";
 
 export class StablecoinRelayStack extends cdk.Stack {
@@ -244,6 +247,67 @@ export class StablecoinRelayStack extends cdk.Stack {
 
     // TODO: WAF blocked requests alarm — re-enable with WAF WebACL above
 
+    // --- S3 Bucket for SPA ---
+
+    const webBucket = new s3.Bucket(this, "WebBucket", {
+      bucketName: `stablecoin-relay-web-${this.account}-${this.region}`,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+    });
+
+    // --- CloudFront Distribution ---
+
+    const apiOrigin = new origins.HttpOrigin(
+      `${httpApi.httpApiId}.execute-api.${this.region}.amazonaws.com`,
+    );
+
+    const distribution = new cloudfront.Distribution(this, "WebDistribution", {
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(webBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      },
+      defaultRootObject: "index.html",
+      errorResponses: [
+        {
+          httpStatus: 403,
+          responsePagePath: "/index.html",
+          responseHttpStatus: 200,
+          ttl: cdk.Duration.seconds(0),
+        },
+        {
+          httpStatus: 404,
+          responsePagePath: "/index.html",
+          responseHttpStatus: 200,
+          ttl: cdk.Duration.seconds(0),
+        },
+      ],
+      additionalBehaviors: {
+        "/chains": {
+          origin: apiOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
+        "/relay/*": {
+          origin: apiOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
+        "/health": {
+          origin: apiOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
+      },
+    });
+
     // --- Outputs ---
 
     new cdk.CfnOutput(this, "ApiUrl", {
@@ -254,6 +318,21 @@ export class StablecoinRelayStack extends cdk.Stack {
     new cdk.CfnOutput(this, "QueueUrl", {
       value: relayQueue.queueUrl,
       description: "SQS queue URL for relay requests",
+    });
+
+    new cdk.CfnOutput(this, "WebBucketName", {
+      value: webBucket.bucketName,
+      description: "S3 bucket for SPA static files",
+    });
+
+    new cdk.CfnOutput(this, "CloudFrontUrl", {
+      value: `https://${distribution.distributionDomainName}`,
+      description: "CloudFront distribution URL",
+    });
+
+    new cdk.CfnOutput(this, "CloudFrontDistributionId", {
+      value: distribution.distributionId,
+      description: "CloudFront distribution ID (for cache invalidation)",
     });
   }
 }

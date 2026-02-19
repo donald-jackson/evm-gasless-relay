@@ -36,13 +36,13 @@ export function QuoteCard({
   const [countdown, setCountdown] = useState<number | null>(null);
 
   const quote = quoteMutation.data;
-  const spender = chain.relayContract as Address;
+  const relayContract = (quote?.relayContract ?? chain.relayContract) as Address;
 
   const { sign, isPending: isSigning, error: signError, ready } = useAuthorizationSignature({
     chainId: chain.chainId,
     tokenAddress: token.address as Address,
     ownerAddress: address,
-    relayContractAddress: spender,
+    relayContractAddress: relayContract,
     value: quote ? BigInt(quote.totalRequired) : 0n,
   });
 

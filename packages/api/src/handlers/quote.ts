@@ -6,6 +6,7 @@ import {
   QUOTE_EXPIRY_MS,
   calculateFee,
   isBlockedAddress,
+  RELAY_CONTRACTS,
 } from "@stablecoin-relay/shared";
 import { logger } from "@stablecoin-relay/shared";
 import { jsonResponse, errorResponse } from "../response.js";
@@ -66,6 +67,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return jsonResponse(200, {
       chainId,
       token,
+      relayContract: RELAY_CONTRACTS[chainId] ?? null,
       fee: fee.toString(),
       totalRequired: totalRequired.toString(),
       gasEstimate: feeData.gasEstimate.toString(),

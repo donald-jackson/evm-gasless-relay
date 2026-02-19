@@ -16,6 +16,7 @@ export interface RelayRequest {
 export interface RelayQuote {
   chainId: number;
   token: string;
+  relayContract: string | null;
   fee: string;
   totalRequired: string;
   gasEstimate: string;

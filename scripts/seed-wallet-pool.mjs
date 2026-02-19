@@ -17,6 +17,7 @@ import {
   HDNodeWallet,
   Mnemonic,
   JsonRpcProvider,
+  Network,
   formatEther,
 } from "ethers";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
@@ -37,7 +38,7 @@ const SECRETS_KEY = "stablecoin-relay/hd-wallet-seed";
 const RELAY_CHAIN_IDS = [1, 8453, 11155111, 84532];
 
 const CHAIN_INFO = {
-  1:        { name: "Ethereum",      nativeToken: "ETH",  rpcUrl: "https://eth.llamarpc.com" },
+  1:        { name: "Ethereum",      nativeToken: "ETH",  rpcUrl: "https://ethereum-rpc.publicnode.com" },
   8453:     { name: "Base",          nativeToken: "ETH",  rpcUrl: "https://mainnet.base.org" },
   11155111: { name: "Sepolia",       nativeToken: "ETH",  rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com" },
   84532:    { name: "Base Sepolia",  nativeToken: "ETH",  rpcUrl: "https://sepolia.base.org" },
@@ -47,6 +48,7 @@ const CHAIN_INFO = {
 const { values: args } = parseArgs({
   options: {
     chains:               { type: "string" },
+    retries:              { type: "string", default: "3" },
     "from-secrets-manager": { type: "boolean", default: false },
     profile:              { type: "string" },
     region:               { type: "string", default: "us-east-1" },
@@ -121,58 +123,76 @@ async function main() {
   }
   const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient(ddbOpts));
 
-  // 5. Seed each chain
+  // 5. Seed each chain (with configurable retries)
+  const maxRetries = Math.max(1, Number(args.retries) || 3);
   const rows = [];
   const failedChains = [];
   for (const chainId of chainIds) {
     const info = CHAIN_INFO[chainId];
     console.log(`\nSeeding ${info.name} (chainId ${chainId})...`);
 
-    try {
-      const provider = new JsonRpcProvider(info.rpcUrl, chainId);
+    let succeeded = false;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Use staticNetwork to skip ethers' internal network detection retries
+        const provider = new JsonRpcProvider(info.rpcUrl, Network.from(chainId), {
+          staticNetwork: true,
+        });
 
-      for (const wallet of wallets) {
-        const [balance, nonce] = await Promise.all([
-          provider.getBalance(wallet.address),
-          provider.getTransactionCount(wallet.address),
-        ]);
+        for (const wallet of wallets) {
+          const [balance, nonce] = await Promise.all([
+            provider.getBalance(wallet.address),
+            provider.getTransactionCount(wallet.address),
+          ]);
 
-        const balanceWei = balance.toString();
+          const balanceWei = balance.toString();
 
-        // Write WalletPool entry
-        await ddbClient.send(
-          new PutCommand({
-            TableName: TABLE_WALLET_POOL,
-            Item: {
-              chainId,
-              address: wallet.address,
-              status: "available",
-              derivationIndex: wallet.index,
-              lastUsed: new Date().toISOString(),
-              balanceWei,
-              currentNonce: nonce,
-            },
-          }),
-        );
+          // Write WalletPool entry
+          await ddbClient.send(
+            new PutCommand({
+              TableName: TABLE_WALLET_POOL,
+              Item: {
+                chainId,
+                address: wallet.address,
+                status: "available",
+                derivationIndex: wallet.index,
+                lastUsed: new Date().toISOString(),
+                balanceWei,
+                currentNonce: nonce,
+              },
+            }),
+          );
 
-        // Write Nonces entry (don't overwrite existing)
-        const noncePk = `${chainId}#${wallet.address}`;
-        await ddbClient.send(
-          new UpdateCommand({
-            TableName: TABLE_NONCES,
-            Key: { pk: noncePk },
-            UpdateExpression: "SET currentNonce = if_not_exists(currentNonce, :nonce)",
-            ExpressionAttributeValues: { ":nonce": nonce },
-          }),
-        );
+          // Write Nonces entry (don't overwrite existing)
+          const noncePk = `${chainId}#${wallet.address}`;
+          await ddbClient.send(
+            new UpdateCommand({
+              TableName: TABLE_NONCES,
+              Key: { pk: noncePk },
+              UpdateExpression: "SET currentNonce = if_not_exists(currentNonce, :nonce)",
+              ExpressionAttributeValues: { ":nonce": nonce },
+            }),
+          );
 
-        const balanceFmt = formatEther(balance);
-        const status = balance === 0n ? "NEEDS FUNDING" : "OK";
-        rows.push({ index: wallet.index, address: wallet.address, chain: info.name, balance: `${balanceFmt} ${info.nativeToken}`, nonce, status });
+          const balanceFmt = formatEther(balance);
+          const status = balance === 0n ? "NEEDS FUNDING" : "OK";
+          rows.push({ index: wallet.index, address: wallet.address, chain: info.name, balance: `${balanceFmt} ${info.nativeToken}`, nonce, status });
+        }
+
+        succeeded = true;
+        break;
+      } catch (err) {
+        const isLastAttempt = attempt === maxRetries;
+        if (isLastAttempt) {
+          console.error(`  [WARN] Failed to seed ${info.name} after ${maxRetries} attempt(s): ${err.message ?? err}`);
+          failedChains.push(info.name);
+        } else {
+          const delaySec = attempt * 2;
+          console.warn(`  [RETRY] Attempt ${attempt}/${maxRetries} failed for ${info.name}: ${err.message ?? err}`);
+          console.warn(`  Retrying in ${delaySec}s...`);
+          await new Promise((resolve) => setTimeout(resolve, delaySec * 1000));
+        }
       }
-    } catch (err) {
-      console.error(`  [WARN] Failed to seed ${info.name} (chainId ${chainId}): ${err.message ?? err}`);
-      failedChains.push(info.name);
     }
   }
 

@@ -4,7 +4,7 @@ set -euo pipefail
 # ─── Stablecoin Relay — Full Deployment Script ──────────────────────────────
 #
 # Usage:
-#   ./deploy.sh --profile <aws-profile> [--region us-east-1] [--skip-contracts] [--chains 1,8453,11155111,84532]
+#   ./deploy.sh --profile <aws-profile> [--region us-east-1] [--skip-contracts] [--chains 1,8453,11155111,84532] [--domain relay.example.com]
 #
 # Required:
 #   --profile         AWS named profile
@@ -14,6 +14,7 @@ set -euo pipefail
 #   --skip-contracts  Skip Foundry contract deployment
 #   --chains          Comma-separated chain IDs for contract deploy & wallet seeding
 #                     (default: 1,8453,11155111,84532)
+#   --domain          Custom domain name (requires Route53 hosted zone for parent domain)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -24,6 +25,7 @@ PROFILE=""
 REGION="us-east-1"
 SKIP_CONTRACTS=false
 CHAINS="1,8453,11155111,84532"
+DOMAIN=""
 
 STACK_NAME="StablecoinRelayStack"
 SECRET_NAME="stablecoin-relay/hd-wallet-seed"
@@ -35,7 +37,7 @@ LAMBDA_NAMES=(chains quote submit status health worker)
 # Uses case statements instead of associative arrays for macOS Bash 3.2 compatibility
 get_rpc_url() {
   case "$1" in
-    1)        echo "https://eth.llamarpc.com" ;;
+    1)        echo "https://ethereum-rpc.publicnode.com" ;;
     137)      echo "https://polygon-rpc.com" ;;
     42161)    echo "https://arb1.arbitrum.io/rpc" ;;
     10)       echo "https://mainnet.optimism.io" ;;
@@ -75,8 +77,9 @@ while [[ $# -gt 0 ]]; do
     --region)     REGION="$2"; shift 2 ;;
     --skip-contracts) SKIP_CONTRACTS=true; shift ;;
     --chains)     CHAINS="$2"; shift 2 ;;
+    --domain)     DOMAIN="$2"; shift 2 ;;
     -h|--help)
-      head -17 "$0" | tail -15
+      head -18 "$0" | tail -16
       exit 0
       ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -85,7 +88,7 @@ done
 
 if [[ -z "$PROFILE" ]]; then
   echo "Error: --profile is required"
-  echo "Usage: ./deploy.sh --profile <aws-profile> [--region us-east-1] [--skip-contracts] [--chains 1,8453]"
+  echo "Usage: ./deploy.sh --profile <aws-profile> [--region us-east-1] [--skip-contracts] [--chains 1,8453] [--domain relay.example.com]"
   exit 1
 fi
 
@@ -166,10 +169,30 @@ if [[ "$SKIP_CONTRACTS" == false ]]; then
     fi
   done
 
+  # Extract deployed addresses from broadcast output
   echo ""
-  echo "  Addresses: contracts/broadcast/Deploy.s.sol/<chainId>/run-latest.json"
-  echo "  NOTE: Update packages/shared/src/addresses.ts if addresses changed"
+  echo "  Extracting deployed contract addresses..."
+  RELAY_CONTRACTS_JSON=$(node -e "
+    const fs = require('fs');
+    const result = {};
+    const chains = '${CHAINS}'.split(',');
+    for (const chainId of chains) {
+      const path = 'contracts/broadcast/Deploy.s.sol/' + chainId + '/run-latest.json';
+      try {
+        const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+        const create = data.transactions.find(t => t.transactionType === 'CREATE');
+        if (create && create.contractAddress) {
+          result[chainId] = create.contractAddress;
+        }
+      } catch {}
+    }
+    console.log(JSON.stringify(result));
+  ")
+  echo "  Deployed addresses: $RELAY_CONTRACTS_JSON"
+  export RELAY_CONTRACTS_JSON
+  ok "Contract addresses extracted"
 else
+  RELAY_CONTRACTS_JSON=""
   echo ""
   echo "  Skipping contract deployment (--skip-contracts)"
 fi
@@ -190,11 +213,22 @@ ok "CDK bootstrapped"
 
 step "CDK deploy"
 
+CDK_CONTEXT_ARGS=""
+if [[ -n "$RELAY_CONTRACTS_JSON" && "$RELAY_CONTRACTS_JSON" != "{}" ]]; then
+  CDK_CONTEXT_ARGS="-c relayContracts=$RELAY_CONTRACTS_JSON"
+  echo "  Relay contracts: $RELAY_CONTRACTS_JSON"
+fi
+if [[ -n "$DOMAIN" ]]; then
+  CDK_CONTEXT_ARGS="$CDK_CONTEXT_ARGS -c domainName=$DOMAIN"
+  echo "  Custom domain: $DOMAIN"
+fi
+
 echo "  Deploying $STACK_NAME..."
 CDK_OUTPUT=$(npx cdk deploy "$STACK_NAME" \
   --require-approval never \
   --profile "$PROFILE" \
   --outputs-file /tmp/cdk-outputs.json \
+  $CDK_CONTEXT_ARGS \
   2>&1) || {
     echo "$CDK_OUTPUT"
     fail "CDK deploy failed"
@@ -208,6 +242,7 @@ API_URL=""
 WEB_BUCKET=""
 CF_DISTRIBUTION_ID=""
 CF_URL=""
+CUSTOM_DOMAIN_URL=""
 if [[ -f /tmp/cdk-outputs.json ]]; then
   API_URL=$(node -e "
     const out = require('/tmp/cdk-outputs.json');
@@ -228,6 +263,11 @@ if [[ -f /tmp/cdk-outputs.json ]]; then
     const out = require('/tmp/cdk-outputs.json');
     const stack = out['$STACK_NAME'] || {};
     console.log(stack.CloudFrontUrl || '');
+  ")
+  CUSTOM_DOMAIN_URL=$(node -e "
+    const out = require('/tmp/cdk-outputs.json');
+    const stack = out['$STACK_NAME'] || {};
+    console.log(stack.CustomDomainUrl || '');
   ")
 fi
 
@@ -324,6 +364,42 @@ for handler in "${LAMBDA_NAMES[@]}"; do
     --region "$REGION"
 done
 ok "All Lambda functions updated and active"
+
+# Inject RELAY_CONTRACTS_JSON env var if we have new addresses
+if [[ -n "$RELAY_CONTRACTS_JSON" && "$RELAY_CONTRACTS_JSON" != "{}" ]]; then
+  echo "  Setting RELAY_CONTRACTS_JSON on all Lambda functions..."
+  for handler in "${LAMBDA_NAMES[@]}"; do
+    FUNC_NAME="stablecoin-relay-${handler}"
+    # Merge new env var with existing ones
+    EXISTING_ENV=$(aws lambda get-function-configuration \
+      --function-name "$FUNC_NAME" \
+      --profile "$PROFILE" \
+      --region "$REGION" \
+      --query 'Environment.Variables' \
+      --output json 2>/dev/null || echo "{}")
+    MERGED_ENV=$(node -e "
+      const existing = ${EXISTING_ENV};
+      existing.RELAY_CONTRACTS_JSON = '${RELAY_CONTRACTS_JSON}';
+      console.log(JSON.stringify({ Variables: existing }));
+    ")
+    aws lambda update-function-configuration \
+      --function-name "$FUNC_NAME" \
+      --environment "$MERGED_ENV" \
+      --profile "$PROFILE" \
+      --region "$REGION" \
+      --no-cli-pager \
+      > /dev/null
+  done
+  # Wait for config updates to propagate
+  for handler in "${LAMBDA_NAMES[@]}"; do
+    FUNC_NAME="stablecoin-relay-${handler}"
+    aws lambda wait function-updated \
+      --function-name "$FUNC_NAME" \
+      --profile "$PROFILE" \
+      --region "$REGION"
+  done
+  ok "RELAY_CONTRACTS_JSON set on all Lambdas"
+fi
 
 # ─── Step 8: Store seed phrase in Secrets Manager ────────────────────────────
 
@@ -443,6 +519,9 @@ if [[ -n "$API_URL" ]]; then
 fi
 if [[ -n "$CF_URL" ]]; then
   echo "  Web:      $CF_URL"
+fi
+if [[ -n "$CUSTOM_DOMAIN_URL" ]]; then
+  echo "  Domain:   $CUSTOM_DOMAIN_URL"
 fi
 echo "  Profile:  $PROFILE"
 echo "  Region:   $REGION"

@@ -93,7 +93,7 @@ export function RelayFlow() {
     );
   }
 
-  function handleConfirm(quote: RelayQuote, permit: { v: number; r: string; s: string; deadline: number }) {
+  function handleConfirm(quote: RelayQuote, auth: { v: number; r: string; s: string; validAfter: number; validBefore: number; nonce: string }) {
     if (!state.chain || !address) return;
 
     submitMutation.mutate({
@@ -103,10 +103,12 @@ export function RelayFlow() {
       to: state.recipient,
       amount: (BigInt(quote.totalRequired) - BigInt(quote.fee)).toString(),
       fee: quote.fee,
-      deadline: permit.deadline,
-      v: permit.v,
-      r: permit.r,
-      s: permit.s,
+      validAfter: auth.validAfter,
+      validBefore: auth.validBefore,
+      nonce: auth.nonce,
+      v: auth.v,
+      r: auth.r,
+      s: auth.s,
     });
 
     dispatch({ type: "START_TRACKING" });

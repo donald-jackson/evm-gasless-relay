@@ -7,6 +7,7 @@ export interface TokenConfig {
 export interface DexConfig {
   readonly name: string;
   readonly quoterV2Address: string;
+  readonly swapRouterAddress?: string;
 }
 
 export interface ChainConfig {
@@ -25,7 +26,7 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     chainId: 1,
     name: "Ethereum",
     nativeToken: "ETH",
-    rpcUrl: "https://eth.llamarpc.com",
+    rpcUrl: "https://ethereum-rpc.publicnode.com",
     blockExplorer: "https://etherscan.io",
     tokens: {
       USDC: {
@@ -37,6 +38,7 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     dex: {
       name: "Uniswap V3",
       quoterV2Address: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+      swapRouterAddress: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
     },
     confirmationBlocks: 2,
   },
@@ -113,6 +115,7 @@ export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
     dex: {
       name: "Uniswap V3",
       quoterV2Address: "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
+      swapRouterAddress: "0x2626664c2603336E57B271c5C0b26F421741e481",
     },
     confirmationBlocks: 1,
   },

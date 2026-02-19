@@ -3,11 +3,11 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {StablecoinRelay} from "../src/StablecoinRelay.sol";
-import {MockERC20Permit} from "./mocks/MockERC20Permit.sol";
+import {MockERC3009} from "./mocks/MockERC3009.sol";
 
 contract StablecoinRelayTest is Test {
     StablecoinRelay public relay;
-    MockERC20Permit public token;
+    MockERC3009 public token;
 
     address public owner;
     uint256 public userPrivateKey;
@@ -27,177 +27,166 @@ contract StablecoinRelayTest is Test {
         relayer = makeAddr("relayer");
 
         relay = new StablecoinRelay();
-        token = new MockERC20Permit("USD Coin", "USDC", 6);
+        token = new MockERC3009("USD Coin", "USDC", 6);
 
         token.mint(user, INITIAL_BALANCE);
     }
 
-    function test_relayWithPermit_happyPath() public {
-        uint256 deadline = block.timestamp + 1 hours;
-        uint256 permitAmount = AMOUNT + FEE;
+    // --- Core helpers ---
 
-        // Sign permit: user approves relay contract to spend amount + fee
-        bytes32 permitHash = _getPermitHash(
-            address(token),
-            user,
-            address(relay),
-            permitAmount,
-            token.nonces(user),
-            deadline
+    function _randomNonce(uint256 seed) internal pure returns (bytes32) {
+        return keccak256(abi.encode("test-nonce", seed));
+    }
+
+    struct AuthParams {
+        uint256 validAfter;
+        uint256 validBefore;
+        bytes32 nonce;
+        uint8 v;
+        bytes32 r;
+        bytes32 s;
+    }
+
+    function _signAuth(uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce)
+        internal
+        view
+        returns (AuthParams memory)
+    {
+        bytes32 digest = _getReceiveAuthorizationHash(
+            address(token), user, address(relay), value, validAfter, validBefore, nonce
         );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, digest);
+        return AuthParams(validAfter, validBefore, nonce, v, r, s);
+    }
 
-        // Relayer calls relayWithPermit
+    function _signAuthWrongKey(uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint256 wrongKey)
+        internal
+        view
+        returns (AuthParams memory)
+    {
+        bytes32 digest = _getReceiveAuthorizationHash(
+            address(token), user, address(relay), value, validAfter, validBefore, nonce
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, digest);
+        return AuthParams(validAfter, validBefore, nonce, v, r, s);
+    }
+
+    function _doRelay(uint256 amount, uint256 fee, AuthParams memory p) internal {
+        relay.relayWithAuthorization(
+            address(token), user, recipient, amount, fee,
+            p.validAfter, p.validBefore, p.nonce, p.v, p.r, p.s
+        );
+    }
+
+    /// @dev Build the EIP-712 digest for ReceiveWithAuthorization
+    function _getReceiveAuthorizationHash(
+        address tokenAddr,
+        address from,
+        address to,
+        uint256 value,
+        uint256 validAfter,
+        uint256 validBefore,
+        bytes32 nonce
+    ) internal view returns (bytes32) {
+        bytes32 RECEIVE_TYPEHASH = keccak256(
+            "ReceiveWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(RECEIVE_TYPEHASH, from, to, value, validAfter, validBefore, nonce)
+        );
+        bytes32 domainSeparator = MockERC3009(tokenAddr).DOMAIN_SEPARATOR();
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+    }
+
+    // --- Tests ---
+
+    function test_relayWithAuthorization_happyPath() public {
+        AuthParams memory p = _signAuth(AMOUNT + FEE, 0, block.timestamp + 1 hours, _randomNonce(1));
+
         vm.prank(relayer);
-        relay.relayWithPermit(
-            address(token),
-            user,
-            recipient,
-            AMOUNT,
-            FEE,
-            deadline,
-            v,
-            r,
-            s
-        );
+        _doRelay(AMOUNT, FEE, p);
 
-        // Verify balances
         assertEq(token.balanceOf(user), INITIAL_BALANCE - AMOUNT - FEE);
         assertEq(token.balanceOf(recipient), AMOUNT);
         assertEq(token.balanceOf(relayer), FEE);
         assertEq(token.balanceOf(address(relay)), 0);
     }
 
-    function test_relayWithPermit_emitsEvent() public {
-        uint256 deadline = block.timestamp + 1 hours;
-        uint256 permitAmount = AMOUNT + FEE;
-
-        bytes32 permitHash = _getPermitHash(
-            address(token),
-            user,
-            address(relay),
-            permitAmount,
-            token.nonces(user),
-            deadline
-        );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+    function test_relayWithAuthorization_emitsEvent() public {
+        AuthParams memory p = _signAuth(AMOUNT + FEE, 0, block.timestamp + 1 hours, _randomNonce(2));
 
         vm.expectEmit(true, true, true, true);
         emit StablecoinRelay.Relayed(address(token), user, recipient, AMOUNT, FEE, relayer);
 
         vm.prank(relayer);
-        relay.relayWithPermit(
-            address(token),
-            user,
-            recipient,
-            AMOUNT,
-            FEE,
-            deadline,
-            v,
-            r,
-            s
-        );
+        _doRelay(AMOUNT, FEE, p);
     }
 
-    function test_relayWithPermit_zeroFee() public {
-        uint256 deadline = block.timestamp + 1 hours;
-        uint256 fee = 0;
-
-        bytes32 permitHash = _getPermitHash(
-            address(token),
-            user,
-            address(relay),
-            AMOUNT + fee,
-            token.nonces(user),
-            deadline
-        );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+    function test_relayWithAuthorization_zeroFee() public {
+        AuthParams memory p = _signAuth(AMOUNT, 0, block.timestamp + 1 hours, _randomNonce(3));
 
         vm.prank(relayer);
-        relay.relayWithPermit(
-            address(token),
-            user,
-            recipient,
-            AMOUNT,
-            fee,
-            deadline,
-            v,
-            r,
-            s
-        );
+        _doRelay(AMOUNT, 0, p);
 
         assertEq(token.balanceOf(user), INITIAL_BALANCE - AMOUNT);
         assertEq(token.balanceOf(recipient), AMOUNT);
         assertEq(token.balanceOf(relayer), 0);
     }
 
-    // --- Edge case tests (2.5) ---
-
-    function test_relayWithPermit_revert_expiredDeadline() public {
-        uint256 deadline = block.timestamp - 1; // already expired
-        uint256 permitAmount = AMOUNT + FEE;
-
-        bytes32 permitHash = _getPermitHash(
-            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
-        );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+    function test_revert_validBeforeInPast() public {
+        AuthParams memory p = _signAuth(AMOUNT + FEE, 0, block.timestamp - 1, _randomNonce(4));
 
         vm.prank(relayer);
-        vm.expectRevert();
-        relay.relayWithPermit(address(token), user, recipient, AMOUNT, FEE, deadline, v, r, s);
+        vm.expectRevert("ERC3009: authorization expired");
+        _doRelay(AMOUNT, FEE, p);
     }
 
-    function test_relayWithPermit_revert_invalidSignature() public {
-        uint256 deadline = block.timestamp + 1 hours;
-        uint256 permitAmount = AMOUNT + FEE;
+    function test_revert_nonceAlreadyUsed() public {
+        bytes32 nonce = _randomNonce(5);
+        AuthParams memory p = _signAuth(AMOUNT + FEE, 0, block.timestamp + 1 hours, nonce);
 
-        // Sign with wrong private key
-        uint256 wrongKey = 0xBEEF;
-        bytes32 permitHash = _getPermitHash(
-            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
-        );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, permitHash);
+        // First relay succeeds
+        vm.prank(relayer);
+        _doRelay(AMOUNT, FEE, p);
+
+        // Mint more tokens so balance isn't the issue
+        token.mint(user, AMOUNT + FEE);
+
+        // Second relay with same nonce reverts
+        vm.prank(relayer);
+        vm.expectRevert("ERC3009: authorization already used");
+        _doRelay(AMOUNT, FEE, p);
+    }
+
+    function test_revert_invalidSignature() public {
+        AuthParams memory p = _signAuthWrongKey(AMOUNT + FEE, 0, block.timestamp + 1 hours, _randomNonce(6), 0xBEEF);
 
         vm.prank(relayer);
-        vm.expectRevert();
-        relay.relayWithPermit(address(token), user, recipient, AMOUNT, FEE, deadline, v, r, s);
+        vm.expectRevert("ERC3009: invalid signature");
+        _doRelay(AMOUNT, FEE, p);
     }
 
-    function test_relayWithPermit_revert_whenPaused() public {
-        uint256 deadline = block.timestamp + 1 hours;
-        uint256 permitAmount = AMOUNT + FEE;
+    function test_revert_whenPaused() public {
+        AuthParams memory p = _signAuth(AMOUNT + FEE, 0, block.timestamp + 1 hours, _randomNonce(7));
 
-        bytes32 permitHash = _getPermitHash(
-            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
-        );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
-
-        // Owner pauses the contract
         relay.pause();
 
         vm.prank(relayer);
         vm.expectRevert();
-        relay.relayWithPermit(address(token), user, recipient, AMOUNT, FEE, deadline, v, r, s);
+        _doRelay(AMOUNT, FEE, p);
     }
 
-    function test_relayWithPermit_revert_insufficientBalance() public {
-        uint256 deadline = block.timestamp + 1 hours;
-        uint256 bigAmount = INITIAL_BALANCE; // amount + fee > balance
+    function test_revert_insufficientBalance() public {
+        uint256 bigAmount = INITIAL_BALANCE;
         uint256 fee = 1e6;
-        uint256 permitAmount = bigAmount + fee;
-
-        bytes32 permitHash = _getPermitHash(
-            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
-        );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+        AuthParams memory p = _signAuth(bigAmount + fee, 0, block.timestamp + 1 hours, _randomNonce(8));
 
         vm.prank(relayer);
         vm.expectRevert();
-        relay.relayWithPermit(address(token), user, recipient, bigAmount, fee, deadline, v, r, s);
+        _doRelay(bigAmount, fee, p);
     }
 
     function test_withdrawFees_onlyOwner() public {
-        // Non-owner cannot withdraw
         vm.prank(relayer);
         vm.expectRevert();
         relay.withdrawFees(address(token), relayer);
@@ -213,37 +202,11 @@ contract StablecoinRelayTest is Test {
         relay.pause();
         relay.unpause();
 
-        // Should work after unpause
-        uint256 deadline = block.timestamp + 1 hours;
-        uint256 permitAmount = AMOUNT + FEE;
-
-        bytes32 permitHash = _getPermitHash(
-            address(token), user, address(relay), permitAmount, token.nonces(user), deadline
-        );
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, permitHash);
+        AuthParams memory p = _signAuth(AMOUNT + FEE, 0, block.timestamp + 1 hours, _randomNonce(9));
 
         vm.prank(relayer);
-        relay.relayWithPermit(address(token), user, recipient, AMOUNT, FEE, deadline, v, r, s);
+        _doRelay(AMOUNT, FEE, p);
 
         assertEq(token.balanceOf(recipient), AMOUNT);
-    }
-
-    // Helper to build the EIP-2612 permit digest
-    function _getPermitHash(
-        address tokenAddr,
-        address ownerAddr,
-        address spender,
-        uint256 value,
-        uint256 nonce,
-        uint256 deadline
-    ) internal view returns (bytes32) {
-        bytes32 PERMIT_TYPEHASH = keccak256(
-            "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
-        );
-        bytes32 structHash = keccak256(
-            abi.encode(PERMIT_TYPEHASH, ownerAddr, spender, value, nonce, deadline)
-        );
-        bytes32 domainSeparator = MockERC20Permit(tokenAddr).DOMAIN_SEPARATOR();
-        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
     }
 }

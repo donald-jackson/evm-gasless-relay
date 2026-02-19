@@ -19,7 +19,7 @@ cd "$SCRIPT_DIR/.."
 CHAIN_IDS=(1 137 42161 10 8453 56 43114 59144 534352)
 
 declare -A RPC_URLS=(
-  [1]="https://eth.llamarpc.com"
+  [1]="https://ethereum-rpc.publicnode.com"
   [137]="https://polygon-rpc.com"
   [42161]="https://arb1.arbitrum.io/rpc"
   [10]="https://mainnet.optimism.io"

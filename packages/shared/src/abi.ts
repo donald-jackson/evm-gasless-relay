@@ -27,14 +27,16 @@ export const STABLECOIN_RELAY_ABI = [
   },
   {
     type: "function",
-    name: "relayWithPermit",
+    name: "relayWithAuthorization",
     inputs: [
       { name: "token", type: "address" },
       { name: "from", type: "address" },
       { name: "to", type: "address" },
       { name: "amount", type: "uint256" },
       { name: "fee", type: "uint256" },
-      { name: "deadline", type: "uint256" },
+      { name: "validAfter", type: "uint256" },
+      { name: "validBefore", type: "uint256" },
+      { name: "nonce", type: "bytes32" },
       { name: "v", type: "uint8" },
       { name: "r", type: "bytes32" },
       { name: "s", type: "bytes32" },
@@ -140,5 +142,25 @@ export const ERC20_ABI = [
     inputs: [],
     outputs: [{ name: "", type: "string" }],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "transfer",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "approve",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
   },
 ] as const;

@@ -26,7 +26,9 @@ const submitRequestSchema = z.object({
   to: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   amount: z.string().regex(/^\d+$/),
   fee: z.string().regex(/^\d+$/),
-  deadline: z.number().int().positive(),
+  validAfter: z.number().int().min(0),
+  validBefore: z.number().int().positive(),
+  nonce: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
   v: z.number().int().min(0).max(255),
   r: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
   s: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
@@ -48,7 +50,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return errorResponse(400, "Invalid request", parsed.error.flatten());
     }
 
-    const { chainId, token, from, to, amount, fee, deadline, v, r, s } = parsed.data;
+    const { chainId, token, from, to, amount, fee, validAfter, validBefore, nonce, v, r, s } = parsed.data;
 
     // OFAC sanctions check
     if (isBlockedAddress(from) || isBlockedAddress(to)) {
@@ -74,9 +76,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return errorResponse(400, "Amount exceeds maximum relay amount");
     }
 
-    // Validate deadline is in the future
-    if (deadline <= Math.floor(Date.now() / 1000)) {
-      return errorResponse(400, "Deadline has already passed");
+    // Validate validBefore is in the future
+    if (validBefore <= Math.floor(Date.now() / 1000)) {
+      return errorResponse(400, "Authorization has already expired");
     }
 
     const requestId = `req_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
@@ -117,7 +119,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           to,
           amount,
           fee,
-          deadline,
+          validAfter,
+          validBefore,
+          nonce,
           v,
           r,
           s,

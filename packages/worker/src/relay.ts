@@ -48,7 +48,9 @@ interface RelayMessage {
   to: string;
   amount: string;
   fee: string;
-  deadline: number;
+  validAfter: number;
+  validBefore: number;
+  nonce: string; // bytes32 hex (EIP-3009 authorization nonce)
   v: number;
   r: string;
   s: string;
@@ -89,7 +91,7 @@ async function updateTransactionStatus(
 
 async function processRelayMessage(msg: RelayMessage): Promise<void> {
   const startTime = Date.now();
-  const { requestId, chainId, token, from, to, amount, fee, deadline, v, r, s } = msg;
+  const { requestId, chainId, token, from, to, amount, fee, validAfter, validBefore, nonce: authNonce, v, r, s } = msg;
   const chain = getChainConfig(chainId);
   const relayAddress = RELAY_CONTRACTS[chainId];
 
@@ -166,7 +168,7 @@ async function processRelayMessage(msg: RelayMessage): Promise<void> {
     });
 
     // Send the transaction
-    const tx = await relay.relayWithPermit(token, from, to, amount, fee, deadline, v, r, s, {
+    const tx = await relay.relayWithAuthorization(token, from, to, amount, fee, validAfter, validBefore, authNonce, v, r, s, {
       nonce,
     });
     txSubmitted = true;

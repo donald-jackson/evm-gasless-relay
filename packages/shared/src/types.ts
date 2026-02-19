@@ -5,7 +5,9 @@ export interface RelayRequest {
   to: string;
   amount: string;
   fee: string;
-  deadline: number;
+  validAfter: number;
+  validBefore: number;
+  nonce: string; // bytes32 hex
   v: number;
   r: string;
   s: string;

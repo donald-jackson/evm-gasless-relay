@@ -15,7 +15,7 @@ const WALLET_COUNT = 5;
 const DEV_SEED = null; // Set SEED_PHRASE env var
 
 const CHAINS = [
-  { chainId: 1, name: "Ethereum", nativeToken: "ETH", rpcUrl: "https://eth.llamarpc.com" },
+  { chainId: 1, name: "Ethereum", nativeToken: "ETH", rpcUrl: "https://ethereum-rpc.publicnode.com" },
   { chainId: 137, name: "Polygon", nativeToken: "MATIC", rpcUrl: "https://polygon-rpc.com" },
   { chainId: 42161, name: "Arbitrum", nativeToken: "ETH", rpcUrl: "https://arb1.arbitrum.io/rpc" },
   { chainId: 10, name: "Optimism", nativeToken: "ETH", rpcUrl: "https://mainnet.optimism.io" },

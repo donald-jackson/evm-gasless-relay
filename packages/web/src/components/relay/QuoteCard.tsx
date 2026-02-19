@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuote } from "@/hooks/useQuote";
-import { usePermitSignature } from "@/hooks/usePermitSignature";
+import { useAuthorizationSignature } from "@/hooks/useAuthorizationSignature";
 import { formatUSDC, shortenAddress } from "@/lib/format";
 import type { ChainInfo } from "@/hooks/useChains";
 import type { RelayQuote } from "@/types";
@@ -17,7 +17,7 @@ interface QuoteCardProps {
   recipient: string;
   amount: string;
   amountRaw: string;
-  onConfirm: (quote: RelayQuote, permit: { v: number; r: string; s: string; deadline: number }) => void;
+  onConfirm: (quote: RelayQuote, auth: { v: number; r: string; s: string; validAfter: number; validBefore: number; nonce: string }) => void;
   onBack: () => void;
 }
 
@@ -38,11 +38,11 @@ export function QuoteCard({
   const quote = quoteMutation.data;
   const spender = chain.relayContract as Address;
 
-  const { sign, isPending: isSigning, error: signError, nonceLoaded } = usePermitSignature({
+  const { sign, isPending: isSigning, error: signError, ready } = useAuthorizationSignature({
     chainId: chain.chainId,
     tokenAddress: token.address as Address,
     ownerAddress: address,
-    spenderAddress: spender,
+    relayContractAddress: spender,
     value: quote ? BigInt(quote.totalRequired) : 0n,
   });
 
@@ -166,7 +166,7 @@ export function QuoteCard({
             <Button
               className="w-full"
               onClick={handleConfirm}
-              disabled={expired || isSigning || !nonceLoaded}
+              disabled={expired || isSigning || !ready}
             >
               {isSigning ? (
                 <>

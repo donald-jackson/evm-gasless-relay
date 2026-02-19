@@ -7,16 +7,47 @@ import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as eventsources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 // import * as wafv2 from "aws-cdk-lib/aws-wafv2"; // TODO: re-enable with WAF
+import * as events from "aws-cdk-lib/aws-events";
+import * as eventTargets from "aws-cdk-lib/aws-events-targets";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
+import * as route53 from "aws-cdk-lib/aws-route53";
+import * as targets from "aws-cdk-lib/aws-route53-targets";
 import type { Construct } from "constructs";
 
 export class StablecoinRelayStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // --- Custom Domain (optional) ---
+
+    const domainName = this.node.tryGetContext("domainName") as string | undefined;
+    let certificate: acm.ICertificate | undefined;
+    let domainNames: string[] | undefined;
+    let hostedZone: route53.IHostedZone | undefined;
+
+    if (domainName) {
+      // CloudFront requires ACM certificates in us-east-1
+      if (!cdk.Token.isUnresolved(this.region) && this.region !== "us-east-1") {
+        throw new Error("Custom domain requires stack deployed in us-east-1");
+      }
+
+      const zoneName = domainName.split(".").slice(1).join(".");
+      hostedZone = route53.HostedZone.fromLookup(this, "HostedZone", {
+        domainName: zoneName,
+      });
+
+      certificate = new acm.Certificate(this, "Certificate", {
+        domainName,
+        validation: acm.CertificateValidation.fromDns(hostedZone),
+      });
+
+      domainNames = [domainName];
+    }
 
     // --- DynamoDB Tables ---
 
@@ -40,6 +71,14 @@ export class StablecoinRelayStack extends cdk.Stack {
       partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const sweepAuditTable = new dynamodb.Table(this, "SweepAudit", {
+      tableName: "StablecoinRelay-SweepAudit",
+      partitionKey: { name: "cycleId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      timeToLiveAttribute: "expiresAt",
     });
 
     // --- Secrets Manager ---
@@ -76,6 +115,9 @@ export class StablecoinRelayStack extends cdk.Stack {
       code: lambda.Code.fromInline("exports.handler = async () => ({ statusCode: 200 })"),
       environment: {
         SQS_QUEUE_URL: relayQueue.queueUrl,
+        ...(this.node.tryGetContext("relayContracts")
+          ? { RELAY_CONTRACTS_JSON: this.node.tryGetContext("relayContracts") }
+          : {}),
       },
     };
 
@@ -127,6 +169,28 @@ export class StablecoinRelayStack extends cdk.Stack {
         batchSize: 1,
       }),
     );
+
+    // --- Sweep Lambda ---
+
+    const sweepHandler = new lambda.Function(this, "SweepHandler", {
+      ...lambdaDefaults,
+      functionName: "stablecoin-relay-sweeper",
+      timeout: cdk.Duration.minutes(10),
+      memorySize: 512,
+      reservedConcurrentExecutions: 1,
+    });
+
+    walletPoolTable.grantReadWriteData(sweepHandler);
+    noncesTable.grantReadWriteData(sweepHandler);
+    sweepAuditTable.grantReadWriteData(sweepHandler);
+    walletSeedSecret.grantRead(sweepHandler);
+
+    // EventBridge rule: run sweep every 2 hours
+    const sweepScheduleRule = new events.Rule(this, "SweepScheduleRule", {
+      ruleName: "stablecoin-relay-sweep-schedule",
+      schedule: events.Schedule.rate(cdk.Duration.hours(2)),
+    });
+    sweepScheduleRule.addTarget(new eventTargets.LambdaFunction(sweepHandler));
 
     // --- API Gateway ---
 
@@ -247,6 +311,54 @@ export class StablecoinRelayStack extends cdk.Stack {
 
     // TODO: WAF blocked requests alarm — re-enable with WAF WebACL above
 
+    // --- Sweep Alarms ---
+
+    const sweepErrorMetric = sweepHandler.metricErrors({
+      period: cdk.Duration.minutes(5),
+      statistic: "Sum",
+    });
+    new cloudwatch.Alarm(this, "SweepErrorAlarm", {
+      alarmName: "stablecoin-relay-sweep-errors",
+      alarmDescription: "Sweep Lambda errors detected",
+      metric: sweepErrorMetric,
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    });
+
+    const sweepDurationMetric = sweepHandler.metricDuration({
+      period: cdk.Duration.minutes(10),
+      statistic: "Maximum",
+    });
+    new cloudwatch.Alarm(this, "SweepDurationAlarm", {
+      alarmName: "stablecoin-relay-sweep-duration",
+      alarmDescription: "Sweep Lambda duration exceeds 8 minutes",
+      metric: sweepDurationMetric,
+      threshold: 480000, // 8 minutes in ms
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
+
+    const sweepLogGroup = sweepHandler.logGroup;
+    const sweepCycleFailedFilter = new logs.MetricFilter(this, "SweepCycleFailedMetricFilter", {
+      logGroup: sweepLogGroup,
+      filterPattern: logs.FilterPattern.literal('"Sweep cycle failed"'),
+      metricNamespace: "StablecoinRelay",
+      metricName: "SweepCycleFailed",
+      metricValue: "1",
+    });
+    new cloudwatch.Alarm(this, "SweepCycleFailedAlarm", {
+      alarmName: "stablecoin-relay-sweep-cycle-failed",
+      alarmDescription: "Sweep cycle failures detected in logs",
+      metric: sweepCycleFailedFilter.metric({
+        period: cdk.Duration.minutes(15),
+        statistic: "Sum",
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    });
+
     // --- S3 Bucket for SPA ---
 
     const webBucket = new s3.Bucket(this, "WebBucket", {
@@ -263,6 +375,8 @@ export class StablecoinRelayStack extends cdk.Stack {
     );
 
     const distribution = new cloudfront.Distribution(this, "WebDistribution", {
+      domainNames,
+      certificate,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(webBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -308,6 +422,21 @@ export class StablecoinRelayStack extends cdk.Stack {
       },
     });
 
+    // --- Route53 Alias Records ---
+
+    if (domainName && hostedZone) {
+      new route53.ARecord(this, "SiteAliasRecord", {
+        zone: hostedZone,
+        recordName: domainName,
+        target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution)),
+      });
+      new route53.AaaaRecord(this, "SiteAliasRecordV6", {
+        zone: hostedZone,
+        recordName: domainName,
+        target: route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution)),
+      });
+    }
+
     // --- Outputs ---
 
     new cdk.CfnOutput(this, "ApiUrl", {
@@ -334,5 +463,12 @@ export class StablecoinRelayStack extends cdk.Stack {
       value: distribution.distributionId,
       description: "CloudFront distribution ID (for cache invalidation)",
     });
+
+    if (domainName) {
+      new cdk.CfnOutput(this, "CustomDomainUrl", {
+        value: `https://${domainName}`,
+        description: "Custom domain URL",
+      });
+    }
   }
 }

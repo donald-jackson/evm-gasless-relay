@@ -1,8 +1,9 @@
 /**
  * E2E Integration Test on Sepolia
  *
- * This test signs a USDC permit on Sepolia, submits it via the deployed API,
- * polls for confirmation, and verifies the token transfer on-chain.
+ * This test signs a USDC TransferWithAuthorization (EIP-3009) on Sepolia,
+ * submits it via the deployed API, polls for confirmation, and verifies
+ * the token transfer on-chain.
  *
  * Requirements:
  *   - E2E_API_URL: Deployed API Gateway URL
@@ -13,6 +14,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { randomBytes } from "node:crypto";
 import { Contract, JsonRpcProvider, Wallet } from "ethers";
 
 const API_URL = process.env.E2E_API_URL;
@@ -23,9 +25,8 @@ const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 const SEPOLIA_USDC = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
 const RELAY_CONTRACT = "0xc0F92D26bBeBC242F14c1d984dBB51270c674ECe";
 
-const ERC20_PERMIT_ABI = [
+const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
-  "function nonces(address) view returns (uint256)",
   "function name() view returns (string)",
   "function DOMAIN_SEPARATOR() view returns (bytes32)",
   "function decimals() view returns (uint8)",
@@ -35,10 +36,10 @@ const ERC20_PERMIT_ABI = [
 const runE2E = API_URL && SENDER_KEY;
 
 describe.skipIf(!runE2E)("E2E Sepolia relay", () => {
-  it("should submit a USDC permit relay and confirm on-chain", async () => {
+  it("should submit a USDC authorization relay and confirm on-chain", async () => {
     const provider = new JsonRpcProvider(SEPOLIA_RPC, SEPOLIA_CHAIN_ID);
     const sender = new Wallet(SENDER_KEY!, provider);
-    const usdc = new Contract(SEPOLIA_USDC, ERC20_PERMIT_ABI, provider);
+    const usdc = new Contract(SEPOLIA_USDC, ERC20_ABI, provider);
 
     // Use a burn address as recipient for test
     const recipient = "0x000000000000000000000000000000000000dEaD";
@@ -51,35 +52,40 @@ describe.skipIf(!runE2E)("E2E Sepolia relay", () => {
     const balance: bigint = await usdc.balanceOf(sender.address);
     expect(balance).toBeGreaterThanOrEqual(totalRequired);
 
-    // Get permit parameters
-    const nonce: bigint = await usdc.nonces(sender.address);
+    // Get token name for EIP-712 domain
     const name: string = await usdc.name();
-    const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour
 
-    // EIP-2612 permit signature
+    // EIP-3009 TransferWithAuthorization parameters
+    const validAfter = 0;
+    const validBefore = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+    const nonce = "0x" + randomBytes(32).toString("hex");
+
+    // EIP-712 domain (USDC uses version "2")
     const domain = {
       name,
-      version: "1",
+      version: "2",
       chainId: SEPOLIA_CHAIN_ID,
       verifyingContract: SEPOLIA_USDC,
     };
 
     const types = {
-      Permit: [
-        { name: "owner", type: "address" },
-        { name: "spender", type: "address" },
+      ReceiveWithAuthorization: [
+        { name: "from", type: "address" },
+        { name: "to", type: "address" },
         { name: "value", type: "uint256" },
-        { name: "nonce", type: "uint256" },
-        { name: "deadline", type: "uint256" },
+        { name: "validAfter", type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce", type: "bytes32" },
       ],
     };
 
     const message = {
-      owner: sender.address,
-      spender: RELAY_CONTRACT,
+      from: sender.address,
+      to: RELAY_CONTRACT,
       value: totalRequired,
+      validAfter,
+      validBefore,
       nonce,
-      deadline,
     };
 
     const signature = await sender.signTypedData(domain, types, message);
@@ -96,7 +102,9 @@ describe.skipIf(!runE2E)("E2E Sepolia relay", () => {
         to: recipient,
         amount: amount.toString(),
         fee: fee.toString(),
-        deadline,
+        validAfter,
+        validBefore,
+        nonce,
         v,
         r,
         s,

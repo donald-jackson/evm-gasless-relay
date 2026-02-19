@@ -7,3 +7,4 @@ export * from "./constants.js";
 export * from "./fee/index.js";
 export * from "./logger.js";
 export * from "./blocklist.js";
+export * from "./sweep/index.js";

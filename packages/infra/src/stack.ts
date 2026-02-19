@@ -6,7 +6,7 @@ import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as eventsources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
-// import * as wafv2 from "aws-cdk-lib/aws-wafv2"; // TODO: re-enable with WAF
+import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import * as events from "aws-cdk-lib/aws-events";
 import * as eventTargets from "aws-cdk-lib/aws-events-targets";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
@@ -240,9 +240,52 @@ export class StablecoinRelayStack extends cdk.Stack {
       integration: new integrations.HttpLambdaIntegration("HealthIntegration", healthHandler),
     });
 
-    // --- WAF WebACL ---
-    // TODO: WAFv2 association with HTTP API $default stage causes CloudFormation
-    // validation errors. Re-enable once using a named stage or custom resource.
+    // --- WAF WebACL (CloudFront) ---
+
+    const SANCTIONED_COUNTRIES = ["CU", "IR", "KP", "SY", "RU"];
+
+    const webAcl = new wafv2.CfnWebACL(this, "WebAcl", {
+      name: "stablecoin-relay-waf",
+      scope: "CLOUDFRONT",
+      defaultAction: { allow: {} },
+      visibilityConfig: {
+        cloudWatchMetricsEnabled: true,
+        metricName: "stablecoin-relay-waf",
+        sampledRequestsEnabled: true,
+      },
+      rules: [
+        {
+          name: "GeoBlockSanctionedCountries",
+          priority: 1,
+          action: { block: {} },
+          statement: {
+            geoMatchStatement: { countryCodes: SANCTIONED_COUNTRIES },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: "GeoBlockSanctionedCountries",
+            sampledRequestsEnabled: true,
+          },
+        },
+        {
+          name: "RateLimitPerIP",
+          priority: 2,
+          action: { block: {} },
+          statement: {
+            rateBasedStatement: {
+              aggregateKeyType: "IP",
+              limit: 2000,
+              evaluationWindowSec: 300,
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: "RateLimitPerIP",
+            sampledRequestsEnabled: true,
+          },
+        },
+      ],
+    });
 
     // --- CloudWatch Alarms ---
 
@@ -309,7 +352,25 @@ export class StablecoinRelayStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    // TODO: WAF blocked requests alarm — re-enable with WAF WebACL above
+    const wafBlockedMetric = new cloudwatch.Metric({
+      namespace: "AWS/WAFV2",
+      metricName: "BlockedRequests",
+      dimensionsMap: {
+        WebACL: "stablecoin-relay-waf",
+        Region: "us-east-1",
+        Rule: "ALL",
+      },
+      period: cdk.Duration.minutes(5),
+      statistic: "Sum",
+    });
+    new cloudwatch.Alarm(this, "WafBlockedRequestsAlarm", {
+      alarmName: "stablecoin-relay-waf-blocked",
+      alarmDescription: "WAF blocked requests exceed 100 per 5 minutes",
+      metric: wafBlockedMetric,
+      threshold: 100,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    });
 
     // --- Sweep Alarms ---
 
@@ -377,6 +438,7 @@ export class StablecoinRelayStack extends cdk.Stack {
     const distribution = new cloudfront.Distribution(this, "WebDistribution", {
       domainNames,
       certificate,
+      webAclId: webAcl.attrArn,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(webBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -462,6 +524,11 @@ export class StablecoinRelayStack extends cdk.Stack {
     new cdk.CfnOutput(this, "CloudFrontDistributionId", {
       value: distribution.distributionId,
       description: "CloudFront distribution ID (for cache invalidation)",
+    });
+
+    new cdk.CfnOutput(this, "WebAclArn", {
+      value: webAcl.attrArn,
+      description: "WAF WebACL ARN attached to CloudFront",
     });
 
     if (domainName) {
